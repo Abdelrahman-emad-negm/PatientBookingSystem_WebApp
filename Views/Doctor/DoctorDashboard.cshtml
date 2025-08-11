@@ -1,0 +1,94 @@
+﻿@model Tuple<PatientBooking.Models.Appointment, List<PatientBooking.Models.Appointment>>
+
+@{
+    ViewData["Title"] = "Doctor Dashboard";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var appointmentForm = Model.Item1;
+    var appointments = Model.Item2;
+}
+
+<div class="container mt-5">
+    <h2 class="mb-4 text-center">👨‍⚕️ Doctor Dashboard</h2>
+
+    @if (ViewBag.Error != null)
+    {
+        <div class="alert alert-danger">@ViewBag.Error</div>
+    }
+    @if (ViewBag.Success != null)
+    {
+        <div class="alert alert-success">@ViewBag.Success</div>
+    }
+
+    <!-- Add New Appointment Form -->
+    <div class="card mb-4 shadow-sm border-primary">
+        <div class="card-body">
+            <h5 class="text-primary mb-3">➕ Add New Available Appointment</h5>
+            <form asp-action="AddAppointment" method="post">
+                <div class="row">
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label fw-bold">Date</label>
+                        <input asp-for="@appointmentForm.Date" type="date" class="form-control" required />
+                    </div>
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label fw-bold">Time</label>
+                        <input asp-for="@appointmentForm.TimeSlot" type="time" class="form-control" required />
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-plus-circle"></i> Add Appointment
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Doctor's Appointments Table -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h5 class="mb-3">📅 My Appointments</h5>
+            @if (appointments.Count == 0)
+            {
+                <div class="alert alert-info text-center">No appointments added yet.</div>
+            }
+            else
+            {
+                <table class="table table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Status</th>
+                            <th>Patient</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in appointments)
+                        {
+                            string rowClass = a.Status == "Booked" ? "table-warning" : "table-success";
+                            <tr class="@rowClass">
+                                <td>@a.Date.ToShortDateString()</td>
+                                <td>@a.TimeSlot</td>
+                                <td>@a.Status</td>
+                                <td>@(a.Patient?.Name ?? "Available")</td>
+                                <td>
+                                    @if (a.Status == "Available")
+                                    {
+                                        <a asp-action="DeleteAppointment" asp-route-id="@a.AppointmentId"
+                                           class="btn btn-sm btn-danger"
+                                           onclick="return confirm('Delete this appointment?');">
+                                            Delete
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">N/A</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>

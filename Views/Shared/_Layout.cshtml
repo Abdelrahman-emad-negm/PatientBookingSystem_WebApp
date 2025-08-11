@@ -1,0 +1,109 @@
+﻿@using Microsoft.AspNetCore.Http
+@using System.Security.Claims
+@{
+    // ✅ التحقق من الـ Claims أولاً، ثم Session
+    var userName = User.FindFirst(ClaimTypes.Name)?.Value ?? Context.Session.GetString("UserName");
+    var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? Context.Session.GetString("UserRole");
+    var isLoggedIn = User.Identity.IsAuthenticated || !string.IsNullOrEmpty(userRole);
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"] - Patient Booking</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .nav-link {
+            transition: all 0.3s ease;
+        }
+
+            .nav-link:hover {
+                background-color: rgba(255,255,255,0.1);
+                border-radius: 5px;
+            }
+
+        .alert {
+            border-radius: 10px;
+        }
+
+        .card {
+            border-radius: 15px;
+        }
+
+        .btn {
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">🏥 PatientBooking</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    @if (isLoggedIn)
+                    {
+                        <li class="nav-item">
+                            <span class="navbar-text text-light me-3">
+                                👋 Welcome, <strong>@userName</strong>
+                                <span class="badge bg-primary">@userRole</span>
+                            </span>
+                        </li>
+
+                        @* روابط الـ Admin *@
+                        @if (userRole == "Admin")
+                        {
+                            <li class="nav-item"><a class="nav-link" href="/Admin/AdminDashboard">🏥 Dashboard</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/Admin/ManageSpecialties">⚕️ Specialties</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/Admin/ManageAppointments">📋 Manage Bookings</a></li>
+                        }
+                        @* روابط الـ Doctor *@
+                        else if (userRole == "Doctor")
+                        {
+                            <li class="nav-item"><a class="nav-link" href="/Doctor/DoctorDashboard">📅 My Dashboard</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/Doctor/TodayAppointments">📋 Today</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/Doctor/WeeklySchedule">📆 Weekly</a></li>
+                        }
+                        @* روابط الـ Patient *@
+                        else if (userRole == "Patient")
+                        {
+                            <li class="nav-item"><a class="nav-link" href="/Patient/Dashboard">📅 Book Appointment</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/Patient/MyAppointments">📋 My Appointments</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/Patient/Booking">🔍 Advanced Booking</a></li>
+                        }
+
+                        <li class="nav-item">
+                            <a class="nav-link text-warning fw-bold" href="/Account/Logout">🚪 Logout</a>
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="nav-item"><a class="nav-link" href="/Account/Register">📝 Register</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/Account/Login">🔑 Login</a></li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mt-4">
+        @RenderBody()
+    </main>
+
+    <footer class="bg-dark text-white text-center py-3 mt-5">
+        <div class="container">
+            <p>&copy; 2024 PatientBooking System. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
