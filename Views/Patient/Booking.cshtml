@@ -1,0 +1,232 @@
+﻿@model List<PatientBooking.Models.SpecialtyEnum>
+
+@{
+    ViewData["Title"] = "Advanced Booking";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-4">
+    <!-- Header Section -->
+    <div class="welcome-card card border-0 shadow mb-4 overflow-hidden">
+        <div class="card-body p-0">
+            <div class="row g-0">
+                <div class="col-md-8 p-4 d-flex flex-column">
+                    <h2 class="text-primary mb-3"><i class="fas fa-search me-2"></i> Advanced Booking</h2>
+                    <p class="lead mb-4">Find and book appointments with specialists</p>
+                    <div class="d-flex gap-2 mt-auto">
+                        <a href="/Patient/Dashboard" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Simple Search
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-4 d-none d-md-block">
+                    <div class="h-100 bg-primary-light" style="background: url('https://img.freepik.com/free-vector/medical-team-concept-illustration_114360-840.jpg') center/cover;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Specialty Selection -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0"><i class="fas fa-filter me-2 text-primary"></i> Filter by Specialty</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Select Medical Specialty</label>
+                    <select id="specialtySelect" class="form-select">
+                        <option value="">-- All Specialties --</option>
+                        @foreach (var s in Model)
+                        {
+                            <option value="@s">@s.ToString()</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Doctors List -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-user-md me-2 text-primary"></i> Available Doctors</h5>
+            <span id="doctorCount" class="badge bg-primary rounded-pill">Select specialty</span>
+        </div>
+        <div class="card-body">
+            <div id="loadingIndicator" class="text-center py-4 d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Loading doctors...</p>
+            </div>
+
+            <div id="doctorsContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"></div>
+
+            <div id="noDoctorsMessage" class="text-center py-5">
+                <i class="fas fa-user-md fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">No doctors selected</h4>
+                <p class="text-muted">Please select a specialty to view available doctors</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for Available Slots -->
+<div class="modal fade" id="slotsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalDoctorName">Available Time Slots</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Select Date</label>
+                        <input type="date" id="slotDate" class="form-control"
+                               min="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                    </div>
+                </div>
+
+                <div id="slotsLoading" class="text-center py-3 d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <div id="availableSlots" class="mt-4">
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle me-2"></i> Please select a date to view available time slots
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            const $doctorsContainer = $('#doctorsContainer');
+            const $specialtySelect = $('#specialtySelect');
+            const $loadingIndicator = $('#loadingIndicator');
+            const $noDoctorsMessage = $('#noDoctorsMessage');
+            const $doctorCount = $('#doctorCount');
+
+            let selectedDoctorId = null;
+            let selectedDoctorName = '';
+
+            // Handle specialty change
+            $specialtySelect.on('change', function() {
+                const specialty = $(this).val();
+
+                $doctorsContainer.empty();
+                $noDoctorsMessage.addClass('d-none');
+
+                if (!specialty) {
+                    $doctorCount.text('Select specialty');
+                    $noDoctorsMessage.removeClass('d-none');
+                    return;
+                }
+
+                $loadingIndicator.removeClass('d-none');
+
+                // Fetch doctors by specialty (enum value passed)
+                $.get(`/Patient/GetDoctorsBySpecialty?specialtyEnum=${specialty}`, function(doctors) {
+                    $loadingIndicator.addClass('d-none');
+                    $doctorCount.text(`${doctors.length} doctors available`);
+
+                    if (doctors.length === 0) {
+                        $noDoctorsMessage.removeClass('d-none');
+                        return;
+                    }
+
+                    doctors.forEach(doctor => {
+                        const doctorCard = `
+                            <div class="col">
+                                <div class="doctor-card card h-100 border-0 shadow-sm">
+                                    <div class="doctor-image-container">
+                                        <img src="${doctor.photo || 'https://img.icons8.com/fluency/96/000000/doctor-male.png'}"
+                                             class="doctor-image" alt="${doctor.name}">
+                                        <div class="doctor-specialty-badge">${doctor.specialtyName || 'General'}</div>
+                                    </div>
+                                    <div class="card-body">
+                                        <h5 class="card-title">Dr. ${doctor.name}</h5>
+                                        ${doctor.shortCV ? `<p class="card-text text-muted small">${doctor.shortCV}</p>` : ''}
+
+                                        <button class="btn btn-primary w-100 mt-3 view-slots-btn"
+                                                data-doctor-id="${doctor.doctorId}"
+                                                data-doctor-name="${doctor.name}">
+                                            <i class="fas fa-calendar-alt me-2"></i>View Available Slots
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>`;
+
+                        $doctorsContainer.append(doctorCard);
+                    });
+                });
+            });
+
+            // Handle view slots button click
+            $(document).on('click', '.view-slots-btn', function() {
+                selectedDoctorId = $(this).data('doctor-id');
+                selectedDoctorName = $(this).data('doctor-name');
+
+                $('#modalDoctorName').text(`Available Slots for Dr. ${selectedDoctorName}`);
+                $('#slotDate').val('');
+                $('#availableSlots').html(`
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle me-2"></i> Please select a date to view available time slots
+                    </div>
+                `);
+
+                new bootstrap.Modal(document.getElementById('slotsModal')).show();
+            });
+
+            // Handle date change in modal
+            $('#slotDate').on('change', function() {
+                const date = $(this).val();
+                if (!date || !selectedDoctorId) return;
+
+                $('#slotsLoading').removeClass('d-none');
+                $('#availableSlots').html('');
+
+                $.get(`/Patient/GetAvailableSlots?doctorId=${selectedDoctorId}&date=${date}`, function(slots) {
+                    $('#slotsLoading').addClass('d-none');
+
+                    if (slots.length === 0) {
+                        $('#availableSlots').html(`
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-exclamation-circle me-2"></i> No available slots for this date
+                            </div>
+                        `);
+                        return;
+                    }
+
+                    let slotsHTML = '<div class="row g-2">';
+                    slots.forEach(slot => {
+                        slotsHTML += `
+                            <div class="col-md-3 col-6">
+                                <form method="post" action="/Patient/Book" class="slot-form">
+                                    <input type="hidden" name="id" value="${slot.appointmentId}" />
+                                    <button type="submit" class="btn btn-outline-success w-100 slot-btn">
+                                        ${slot.timeSlot}
+                                    </button>
+                                </form>
+                            </div>`;
+                    });
+                    slotsHTML += '</div>';
+                    $('#availableSlots').html(slotsHTML);
+                });
+            });
+
+            // Confirm booking
+            $(document).on('submit', '.slot-form', function() {
+                const timeSlot = $(this).find('.slot-btn').text();
+                return confirm(`Confirm booking with Dr. ${selectedDoctorName} at ${timeSlot}?`);
+            });
+        });
+    </script>
+}

@@ -1,0 +1,62 @@
+﻿@model List<PatientBooking.Models.Appointment>
+
+@{
+    ViewData["Title"] = "Weekly Schedule";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var startOfWeek = (DateTime)ViewBag.StartOfWeek;
+    var endOfWeek = (DateTime)ViewBag.EndOfWeek;
+}
+
+<div class="container mt-5">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-calendar-week text-primary"></i> Weekly Schedule
+    </h2>
+    <p class="text-center text-muted">
+        From <strong>@startOfWeek.ToString("dd MMM yyyy")</strong>
+        to <strong>@endOfWeek.AddDays(-1).ToString("dd MMM yyyy")</strong>
+    </p>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-secondary text-center">
+            <i class="fas fa-info-circle"></i> No appointments scheduled this week.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Patient</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Model)
+                    {
+                        var statusClass = a.Status switch
+                        {
+                            PatientBooking.Models.AppointmentStatus.Confirmed => "badge bg-success",
+                            PatientBooking.Models.AppointmentStatus.Pending => "badge bg-warning text-dark",
+                            PatientBooking.Models.AppointmentStatus.Cancelled => "badge bg-danger",
+                            PatientBooking.Models.AppointmentStatus.Available => "badge bg-primary",
+                            _ => "badge bg-light text-dark"
+                        };
+
+                        <tr>
+                            <td>@a.Date.ToString("dddd, dd MMM")</td>
+                            <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
+                            <td>@(a.Patient?.Name ?? "Available")</td>
+                            <td><span class="@statusClass">@a.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">

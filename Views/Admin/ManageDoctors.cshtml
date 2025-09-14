@@ -1,0 +1,132 @@
+﻿@model List<PatientBooking.Models.Doctor>
+@{
+    ViewBag.Title = "Manage Doctors";
+    var specialties = ViewBag.Specialties as List<PatientBooking.Models.SpecialtyEnum>;
+}
+
+<div class="container mt-4">
+    <h2>Manage Doctors</h2>
+
+    <!-- ✅ Add / Edit Form -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form asp-action="SaveDoctor" asp-controller="Admin" method="post" enctype="multipart/form-data">
+                <input type="hidden" id="DoctorId" name="DoctorId" />
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <label>Name</label>
+                        <input type="text" id="DoctorName" name="DoctorName" class="form-control" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label>Email</label>
+                        <input type="email" id="DoctorEmail" name="DoctorEmail" class="form-control" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label>Password</label>
+                        <input type="password" id="DoctorPassword" name="DoctorPassword" class="form-control" />
+                        <small class="text-muted">Leave empty if not changing</small>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <label>Specialty</label>
+                        <select id="Specialty" name="Specialty" class="form-control" required>
+                            @foreach (var s in specialties)
+                            {
+                                <option value="@s">@s</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label>Short CV</label>
+                        <input type="text" id="ShortCV" name="ShortCV" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label>Photo</label>
+                        <input type="file" id="Photo" name="Photo" class="form-control" />
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Save Doctor
+                    </button>
+                    <button type="reset" class="btn btn-secondary">
+                        <i class="fas fa-undo"></i> Clear
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ✅ Doctors Table -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            @if (Model.Any())
+            {
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Photo</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Specialty</th>
+                            <th>Short CV</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var doctor in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <img src="@(string.IsNullOrEmpty(doctor.Photo)
+                                                                                         ? "/images/default-doctor.png"
+                                                                                         : doctor.Photo)"
+                                 class="img-thumbnail" style="width:60px;height:60px;" />
+                        </td>
+                        <td>@doctor.User?.Name</td>
+                        <td>@doctor.User?.Email</td>
+                        <td>@doctor.Specialty</td>
+                        <td>@doctor.ShortCV</td>
+                        <td>
+                            <button class="btn btn-warning btn-sm"
+                                    onclick="editDoctor(@doctor.DoctorId, '@doctor.User?.Name', '@doctor.User?.Email', '@doctor.Specialty', '@doctor.ShortCV')">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <form asp-action="DeleteDoctor" asp-controller="Admin"
+                                  asp-route-id="@doctor.DoctorId" method="post" class="d-inline"
+                                  onsubmit="return confirm('Are you sure you want to delete this doctor?');">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="alert alert-info">No doctors found.</div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // ✅ Fill form when editing doctor
+        function editDoctor(id, name, email, specialty, cv) {
+            document.getElementById("DoctorId").value = id;
+            document.getElementById("DoctorName").value = name;
+            document.getElementById("DoctorEmail").value = email;
+            document.getElementById("Specialty").value = specialty;
+            document.getElementById("ShortCV").value = cv;
+            document.getElementById("DoctorPassword").value = "";
+        }
+    </script>
+}

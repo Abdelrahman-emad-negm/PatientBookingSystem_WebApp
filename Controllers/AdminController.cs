@@ -4,306 +4,235 @@ using Microsoft.EntityFrameworkCore;
 using PatientBooking.Data;
 using PatientBooking.Models;
 using System.Security.Claims;
-using System.Linq;
+using Microsoft.AspNetCore.Hosting;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace PatientBooking.Controllers
 {
-    [Authorize] // ✅ حماية كل الـ Controller
+    [Authorize(Roles = "Admin")]
     public class AdminController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly IWebHostEnvironment _hostingEnvironment;
 
-        public AdminController(AppDbContext context)
+        public AdminController(AppDbContext context, IWebHostEnvironment hostingEnvironment)
         {
             _context = context;
+            _hostingEnvironment = hostingEnvironment;
         }
 
-        // ✅ دالة محدثة للتحقق من صلاحية الأدمن
-        private bool IsAdmin()
-        {
-            // ✅ التحقق من الـ Claims أولاً
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-            if (userRole == "Admin")
-                return true;
-
-            // ✅ التحقق من Session كنسخة احتياطية
-            return HttpContext.Session.GetString("UserRole") == "Admin";
-        }
-
-        // ✅ Dashboard موحد فيه الدكاترة والحجوزات
-        [Authorize(Roles = "Admin")] // ✅ حماية إضافية للأدمن فقط
+        // ✅ Dashboard
         public IActionResult AdminDashboard()
         {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
             var doctors = _context.Doctors
-                                  .Include(d => d.User)
-                                  .Include(d => d.Specialty)
-                                  .ToList();
+                .Include(d => d.User)
+                .ToList();
 
             var bookings = _context.Appointments
-                                   .Include(a => a.Doctor)
-                                   .ThenInclude(d => d.User)
-                                   .Include(a => a.Patient)
-                                   .Where(a => a.Status == "Pending" || a.Status == "Confirmed")
-                                   .OrderByDescending(a => a.Date)
-                                   .ToList();
+                .Include(a => a.Doctor).ThenInclude(d => d.User)
+                .Include(a => a.Patient)
+                .OrderByDescending(a => a.Date)
+                .ThenByDescending(a => a.TimeSlot)
+                .ToList();
 
-            var specialties = _context.Specialties.ToList();
+            var specialties = Enum.GetValues(typeof(SpecialtyEnum)).Cast<SpecialtyEnum>().ToList();
 
-            // ✅ إرسال بيانات المستخدم للـ View
-            ViewBag.AdminName = User.FindFirst(ClaimTypes.Name)?.Value ??
-                               HttpContext.Session.GetString("UserName");
+            ViewBag.AdminName = User.FindFirst(ClaimTypes.Name)?.Value;
 
-            // نرجع كـ Tuple للـ View الحالي
-            return View(Tuple.Create(doctors, bookings));
+            return View(Tuple.Create(doctors, bookings, specialties));
         }
 
-        // ✅ إضافة دكتور جديد - GET
-        [Authorize(Roles = "Admin")]
-        public IActionResult AddDoctor()
+        // ✅ Manage Doctors Page
+        public IActionResult ManageDoctors()
         {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
+            var doctors = _context.Doctors
+                .Include(d => d.User)
+                .ToList();
 
-            ViewBag.Specialties = _context.Specialties.ToList();
-            return View();
+            ViewBag.Specialties = Enum.GetValues(typeof(SpecialtyEnum)).Cast<SpecialtyEnum>().ToList();
+            return View(doctors); // ↔️ هيتوجه لملف ManageDoctors.cshtml
         }
 
-        // ✅ إضافة دكتور جديد - POST
+        // ✅ Save Doctor (Add / Edit)
         [HttpPost]
-        [Authorize(Roles = "Admin")]
-        public IActionResult AddDoctor(Doctor doctor, string DoctorName, string DoctorEmail, string DoctorPassword)
+        public async Task<IActionResult> SaveDoctor(int DoctorId, string DoctorName, string DoctorEmail, string DoctorPassword, SpecialtyEnum Specialty, string ShortCV)
         {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
-            if (ModelState.IsValid)
+            if (DoctorId == 0)
             {
-                try
+                // ➕ Add Doctor
+                if (_context.Users.Any(u => u.Email == DoctorEmail))
                 {
-                    // ✅ التحقق من عدم وجود الإيميل مسبقاً
-                    if (_context.Users.Any(u => u.Email == DoctorEmail))
+                    TempData["Error"] = "Email already exists!";
+                    return RedirectToAction("ManageDoctors");
+                }
+
+                var user = new User
+                {
+                    Name = DoctorName,
+                    Email = DoctorEmail,
+                    Password = BCrypt.Net.BCrypt.HashPassword(DoctorPassword),
+                    Role = UserRole.Doctor
+                };
+
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+
+                var doctor = new Doctor
+                {
+                    UserId = user.UserId,
+                    Specialty = Specialty,
+                    ShortCV = ShortCV
+                };
+
+                // Upload photo
+                if (Request.Form.Files.Count > 0)
+                {
+                    var file = Request.Form.Files[0];
+                    if (file.Length > 0)
                     {
-                        ViewBag.Error = "Email already exists!";
-                        ViewBag.Specialties = _context.Specialties.ToList();
-                        return View(doctor);
+                        var uploadsFolder = Path.Combine(_hostingEnvironment.WebRootPath, "uploads/doctors");
+                        if (!Directory.Exists(uploadsFolder))
+                            Directory.CreateDirectory(uploadsFolder);
+
+                        var uniqueFileName = $"{user.UserId}_{Path.GetFileName(file.FileName)}";
+                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await file.CopyToAsync(fileStream);
+                        }
+
+                        doctor.Photo = $"/uploads/doctors/{uniqueFileName}";
                     }
-
-                    // ✅ إنشاء حساب المستخدم للدكتور
-                    var user = new User
-                    {
-                        Name = DoctorName,
-                        Email = DoctorEmail,
-                        Password = new Microsoft.AspNetCore.Identity.PasswordHasher<User>()
-                                      .HashPassword(null, DoctorPassword),
-                        Role = "Doctor"
-                    };
-
-                    _context.Users.Add(user);
-                    _context.SaveChanges();
-
-                    // ✅ إنشاء ملف الدكتور
-                    doctor.UserId = user.UserId;
-                    _context.Doctors.Add(doctor);
-                    _context.SaveChanges();
-
-                    return RedirectToAction("AdminDashboard");
                 }
-                catch (Exception ex)
+
+                if (string.IsNullOrEmpty(doctor.Photo))
+                    doctor.Photo = "/images/default-doctor.png";
+
+                _context.Doctors.Add(doctor);
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                // ✏️ Edit Doctor
+                var existingDoctor = _context.Doctors
+                    .Include(d => d.User)
+                    .FirstOrDefault(d => d.DoctorId == DoctorId);
+
+                if (existingDoctor == null) return NotFound();
+
+                existingDoctor.User.Name = DoctorName;
+                existingDoctor.User.Email = DoctorEmail;
+                existingDoctor.Specialty = Specialty;
+                existingDoctor.ShortCV = ShortCV;
+
+                if (!string.IsNullOrEmpty(DoctorPassword))
+                    existingDoctor.User.Password = BCrypt.Net.BCrypt.HashPassword(DoctorPassword);
+
+                // Update Photo
+                if (Request.Form.Files.Count > 0)
                 {
-                    ViewBag.Error = "Error adding doctor: " + ex.Message;
+                    var file = Request.Form.Files[0];
+                    if (file.Length > 0)
+                    {
+                        var uploadsFolder = Path.Combine(_hostingEnvironment.WebRootPath, "uploads/doctors");
+                        if (!Directory.Exists(uploadsFolder))
+                            Directory.CreateDirectory(uploadsFolder);
+
+                        if (!string.IsNullOrEmpty(existingDoctor.Photo) && !existingDoctor.Photo.Contains("default-doctor.png"))
+                        {
+                            var oldFilePath = Path.Combine(_hostingEnvironment.WebRootPath, existingDoctor.Photo.TrimStart('/'));
+                            if (System.IO.File.Exists(oldFilePath))
+                                System.IO.File.Delete(oldFilePath);
+                        }
+
+                        var uniqueFileName = $"{existingDoctor.UserId}_{Path.GetFileName(file.FileName)}";
+                        var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                        using (var fileStream = new FileStream(filePath, FileMode.Create))
+                        {
+                            await file.CopyToAsync(fileStream);
+                        }
+
+                        existingDoctor.Photo = $"/uploads/doctors/{uniqueFileName}";
+                    }
                 }
+
+                if (string.IsNullOrEmpty(existingDoctor.Photo))
+                    existingDoctor.Photo = "/images/default-doctor.png";
+
+                await _context.SaveChangesAsync();
             }
 
-            ViewBag.Specialties = _context.Specialties.ToList();
-            return View(doctor);
+            return RedirectToAction("ManageDoctors");
         }
 
-        // ✅ تعديل بيانات دكتور - GET
-        [Authorize(Roles = "Admin")]
-        public IActionResult EditDoctor(int id)
-        {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
-            var doctor = _context.Doctors
-                                 .Include(d => d.User)
-                                 .FirstOrDefault(d => d.DoctorId == id);
-
-            if (doctor == null)
-                return NotFound();
-
-            ViewBag.Specialties = _context.Specialties.ToList();
-            return View(doctor);
-        }
-
-        // ✅ تعديل بيانات دكتور - POST
+        // ✅ Delete Doctor
         [HttpPost]
-        [Authorize(Roles = "Admin")]
-        public IActionResult EditDoctor(Doctor doctor, string DoctorName, string DoctorEmail)
+        public async Task<IActionResult> DeleteDoctor(int id)
         {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    var existingDoctor = _context.Doctors
-                                                 .Include(d => d.User)
-                                                 .FirstOrDefault(d => d.DoctorId == doctor.DoctorId);
-
-                    if (existingDoctor != null)
-                    {
-                        // ✅ تحديث بيانات المستخدم
-                        existingDoctor.User.Name = DoctorName;
-                        existingDoctor.User.Email = DoctorEmail;
-
-                        // ✅ تحديث بيانات الدكتور
-                        existingDoctor.SpecialtyId = doctor.SpecialtyId;
-                        existingDoctor.Photo = doctor.Photo;
-                        existingDoctor.ShortCV = doctor.ShortCV;
-
-                        _context.SaveChanges();
-                    }
-
-                    return RedirectToAction("AdminDashboard");
-                }
-                catch (Exception ex)
-                {
-                    ViewBag.Error = "Error updating doctor: " + ex.Message;
-                }
-            }
-
-            ViewBag.Specialties = _context.Specialties.ToList();
-            return View(doctor);
-        }
-
-        // ✅ حذف دكتور
-        [Authorize(Roles = "Admin")]
-        public IActionResult DeleteDoctor(int id)
-        {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
-            var doctor = _context.Doctors
-                                 .Include(d => d.User)
-                                 .FirstOrDefault(d => d.DoctorId == id);
+            var doctor = await _context.Doctors
+                .Include(d => d.User)
+                .FirstOrDefaultAsync(d => d.DoctorId == id);
 
             if (doctor != null)
             {
-                // حذف حساب الدكتور من جدول Users (سيحذف الدكتور تلقائياً بسبب Cascade)
+                if (!string.IsNullOrEmpty(doctor.Photo) && !doctor.Photo.Contains("default-doctor.png"))
+                {
+                    var filePath = Path.Combine(_hostingEnvironment.WebRootPath, doctor.Photo.TrimStart('/'));
+                    if (System.IO.File.Exists(filePath))
+                        System.IO.File.Delete(filePath);
+                }
+
                 _context.Users.Remove(doctor.User);
-                _context.SaveChanges();
+                await _context.SaveChangesAsync();
             }
 
-            return RedirectToAction("AdminDashboard");
+            return RedirectToAction("ManageDoctors");
         }
 
-        // ✅ إدارة التخصصات - GET
-        [Authorize(Roles = "Admin")]
-        public IActionResult ManageSpecialties()
-        {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
-            var specialties = _context.Specialties.ToList();
-            return View(specialties);
-        }
-
-        // ✅ إضافة تخصص جديد - POST
+        // ✅ Manage Appointments
         [HttpPost]
-        [Authorize(Roles = "Admin")]
-        public IActionResult AddSpecialty(string Name)
-        {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
+        public IActionResult ConfirmBooking(int id) => UpdateBookingStatus(id, AppointmentStatus.Confirmed);
 
-            if (!string.IsNullOrWhiteSpace(Name))
+        [HttpPost]
+        public IActionResult RejectBooking(int id) => UpdateBookingStatus(id, AppointmentStatus.Rejected);
+
+        [HttpPost]
+        public IActionResult CancelBooking(int id) => UpdateBookingStatus(id, AppointmentStatus.Cancelled);
+
+        private IActionResult UpdateBookingStatus(int id, AppointmentStatus status)
+        {
+            var appointment = _context.Appointments.FirstOrDefault(a => a.AppointmentId == id);
+            if (appointment != null)
             {
-                var specialty = new Specialty { Name = Name };
-                _context.Specialties.Add(specialty);
+                appointment.Status = status;
                 _context.SaveChanges();
+                return Json(new { success = true });
             }
 
-            return RedirectToAction("ManageSpecialties");
+            return Json(new { success = false });
         }
 
-        // ✅ حذف تخصص
-        [Authorize(Roles = "Admin")]
-        public IActionResult DeleteSpecialty(int id)
+        // ✅ Export Appointments (CSV)
+        public IActionResult ExportAppointments()
         {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
-            var specialty = _context.Specialties.FirstOrDefault(s => s.SpecialtyId == id);
-            if (specialty != null)
-            {
-                _context.Specialties.Remove(specialty);
-                _context.SaveChanges();
-            }
-
-            return RedirectToAction("ManageSpecialties");
-        }
-
-        // ✅ إدارة المواعيد
-        [Authorize(Roles = "Admin")]
-        public IActionResult ManageAppointments()
-        {
-            if (!IsAdmin())
-                return RedirectToAction("Login", "Account");
-
             var appointments = _context.Appointments
-                                       .Include(a => a.Doctor)
-                                       .ThenInclude(d => d.User)
-                                       .Include(a => a.Patient)
-                                       .Include(a => a.Doctor.Specialty)
-                                       .Where(a => a.Status == "Pending")
-                                       .OrderBy(a => a.Date)
-                                       .ThenBy(a => a.TimeSlot)
-                                       .ToList();
+                .Include(a => a.Doctor).ThenInclude(d => d.User)
+                .Include(a => a.Patient)
+                .ToList();
 
-            return View(appointments);
-        }
+            var sb = new StringBuilder();
+            sb.AppendLine("Date,Time,Doctor,Patient,Status");
 
-        // ✅ تأكيد موعد
-        [HttpPost]
-        [Authorize(Roles = "Admin")]
-        public IActionResult ConfirmAppointment(int appointmentId)
-        {
-            if (!IsAdmin())
-                return Json(new { success = false, message = "Unauthorized" });
-
-            var appointment = _context.Appointments.FirstOrDefault(a => a.AppointmentId == appointmentId);
-            if (appointment != null && appointment.Status == "Pending")
+            foreach (var a in appointments)
             {
-                appointment.Status = "Confirmed";
-                _context.SaveChanges();
-                return Json(new { success = true, message = "Appointment confirmed" });
+                sb.AppendLine($"{a.Date:yyyy-MM-dd},{a.TimeSlot},{a.Doctor?.User?.Name},{a.Patient?.Name},{a.Status}");
             }
 
-            return Json(new { success = false, message = "Appointment not found or already processed" });
-        }
-
-        // ✅ رفض موعد
-        [HttpPost]
-        [Authorize(Roles = "Admin")]
-        public IActionResult RejectAppointment(int appointmentId)
-        {
-            if (!IsAdmin())
-                return Json(new { success = false, message = "Unauthorized" });
-
-            var appointment = _context.Appointments.FirstOrDefault(a => a.AppointmentId == appointmentId);
-            if (appointment != null && appointment.Status == "Pending")
-            {
-                appointment.Status = "Rejected";
-                _context.SaveChanges();
-                return Json(new { success = true, message = "Appointment rejected" });
-            }
-
-            return Json(new { success = false, message = "Appointment not found or already processed" });
+            return File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", "appointments.csv");
         }
     }
 }

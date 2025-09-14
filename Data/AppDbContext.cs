@@ -9,7 +9,6 @@ namespace PatientBooking.Data
 
         public DbSet<User> Users { get; set; }
         public DbSet<Doctor> Doctors { get; set; }
-        public DbSet<Specialty> Specialties { get; set; }
         public DbSet<Appointment> Appointments { get; set; }
         public DbSet<WorkingHour> WorkingHours { get; set; }
 
@@ -27,19 +26,15 @@ namespace PatientBooking.Data
                 .HasForeignKey<Doctor>(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Doctor ↔ Specialty (Many-to-One)
-            modelBuilder.Entity<Doctor>()
-                .HasOne(d => d.Specialty)
-                .WithMany(s => s.Doctors)
-                .HasForeignKey(d => d.SpecialtyId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // ❌ حذف علاقة Doctor ↔ Specialty لأنها أصبحت Enum
 
-            // Appointment ↔ Patient (Many-to-One)
+            // Appointment ↔ Patient (Many-to-One) - Optional
             modelBuilder.Entity<Appointment>()
                 .HasOne(a => a.Patient)
                 .WithMany()
                 .HasForeignKey(a => a.PatientId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
 
             // Appointment ↔ Doctor (Many-to-One)
             modelBuilder.Entity<Appointment>()
@@ -47,6 +42,12 @@ namespace PatientBooking.Data
                 .WithMany(d => d.Appointments)
                 .HasForeignKey(a => a.DoctorId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // تعيين القيمة الافتراضية للحالة وتخزينها كـ string
+            modelBuilder.Entity<Appointment>()
+                .Property(a => a.Status)
+                .HasConversion<string>()   // enum يتحول لـ string
+                .HasDefaultValue(AppointmentStatus.Pending);
 
             // WorkingHour ↔ Doctor (Many-to-One)
             modelBuilder.Entity<WorkingHour>()

@@ -1,11 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Authentication;
+﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using PatientBooking.Models;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using PatientBooking.Data;
+using PatientBooking.Models;
 using System.Security.Claims;
-using System.Linq;
 
 namespace PatientBooking.Controllers
 {
@@ -18,91 +17,50 @@ namespace PatientBooking.Controllers
             _context = context;
         }
 
-        // ✅ دالة مساعدة لتوجيه المستخدم حسب دوره
-        private IActionResult RedirectUserByRole(string role)
+        private IActionResult RedirectUserByRole(UserRole role)
         {
             return role switch
             {
-                "Admin" => RedirectToAction("AdminDashboard", "Admin"),
-                "Doctor" => RedirectToAction("DoctorDashboard", "Doctor"),
-                "Patient" => RedirectToAction("Dashboard", "Patient"),
+                UserRole.Admin => RedirectToAction("AdminDashboard", "Admin"),
+                UserRole.Doctor => RedirectToAction("DoctorDashboard", "Doctor"),
+                UserRole.Patient => RedirectToAction("Dashboard", "Patient"),
                 _ => RedirectToAction("Login")
             };
         }
 
-        // GET: /Account/Register
-        public IActionResult Register()
-        {
-            return View();
-        }
+        public IActionResult Register() => View();
 
-        // POST: /Account/Register
         [HttpPost]
         public async Task<IActionResult> Register(User user)
         {
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                try
-                {
-                    // ✅ تحقق من وجود الإيميل مسبقاً
-                    if (_context.Users.Any(u => u.Email == user.Email))
-                    {
-                        ViewBag.Error = "⚠️ Email already exists!";
-                        return View(user);
-                    }
-
-                    // ✅ تشفير كلمة المرور
-                    var hasher = new PasswordHasher<User>();
-                    user.Password = hasher.HashPassword(user, user.Password);
-
-                    // ✅ تعيين Role افتراضي للمريض
-                    if (string.IsNullOrEmpty(user.Role))
-                    {
-                        user.Role = "Patient";
-                    }
-
-                    // ✅ إضافة المستخدم في جدول Users
-                    _context.Users.Add(user);
-                    _context.SaveChanges();
-
-                    // ✅ لو الدور Doctor أضف له سجل في جدول Doctors
-                    if (string.Equals(user.Role, "Doctor", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var doctor = new Doctor
-                        {
-                            UserId = user.UserId,
-                            SpecialtyId = null, // دلوقتي ممكن تبقى null
-                            Photo = null,
-                            ShortCV = null
-                        };
-                        _context.Doctors.Add(doctor);
-                        _context.SaveChanges();
-                    }
-
-                    // ✅ تسجيل الدخول تلقائياً باستخدام Cookie Authentication
-                    await SignInUserAsync(user);
-
-                    return RedirectUserByRole(user.Role);
-                }
-                catch (Exception ex)
-                {
-                    ViewBag.Error = "⚠️ Error saving user: " + ex.Message;
-                }
+                ViewBag.Error = "Please fill all required fields correctly.";
+                return View(user);
             }
-            else
+
+            // تأكد إن الإيميل فريد
+            if (_context.Users.Any(u => u.Email == user.Email))
             {
-                ViewBag.Error = "Model is not valid.";
+                ViewBag.Error = "⚠️ Email already exists!";
+                return View(user);
             }
-            return View(user);
+
+            // أي مستخدم يسجل من هنا يبقى Patient
+            user.Role = UserRole.Patient;
+
+            // تشفير الباسورد بـ BCrypt
+            user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
+
+            _context.Users.Add(user);
+            _context.SaveChanges();
+
+            await SignInUserAsync(user);
+            return RedirectUserByRole(user.Role);
         }
 
-        // GET: /Account/Login
-        public IActionResult Login()
-        {
-            return View();
-        }
+        public IActionResult Login() => View();
 
-        // POST: /Account/Login
         [HttpPost]
         public async Task<IActionResult> Login(string Email, string Password)
         {
@@ -113,25 +71,23 @@ namespace PatientBooking.Controllers
             }
 
             var user = _context.Users.FirstOrDefault(u => u.Email == Email);
-            if (user != null)
+            if (user == null)
             {
-                var hasher = new PasswordHasher<User>();
-                var result = hasher.VerifyHashedPassword(user, user.Password, Password);
+                ViewBag.Error = "Invalid email or password.";
+                return View();
+            }
 
-                if (result == PasswordVerificationResult.Success)
-                {
-                    // ✅ تسجيل الدخول باستخدام Cookie Authentication
-                    await SignInUserAsync(user);
-
-                    return RedirectUserByRole(user.Role);
-                }
+            // ✅ التحقق بباسورد BCrypt
+            if (BCrypt.Net.BCrypt.Verify(Password, user.Password))
+            {
+                await SignInUserAsync(user);
+                return RedirectUserByRole(user.Role);
             }
 
             ViewBag.Error = "Invalid email or password.";
             return View();
         }
 
-        // GET: /Account/Logout
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -139,7 +95,6 @@ namespace PatientBooking.Controllers
             return RedirectToAction("Login");
         }
 
-        // ✅ دالة مساعدة لتسجيل الدخول باستخدام Claims
         private async Task SignInUserAsync(User user)
         {
             var claims = new List<Claim>
@@ -147,7 +102,7 @@ namespace PatientBooking.Controllers
                 new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
                 new Claim(ClaimTypes.Name, user.Name),
                 new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role)
+                new Claim(ClaimTypes.Role, user.Role.ToString())
             };
 
             var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -162,9 +117,8 @@ namespace PatientBooking.Controllers
                     ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(60)
                 });
 
-            // ✅ حفظ البيانات في Session كنسخة احتياطية
             HttpContext.Session.SetInt32("UserId", user.UserId);
-            HttpContext.Session.SetString("UserRole", user.Role);
+            HttpContext.Session.SetString("UserRole", user.Role.ToString());
             HttpContext.Session.SetString("UserName", user.Name);
         }
     }

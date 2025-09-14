@@ -1,17 +1,23 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using PatientBooking.Data;
+using PatientBooking.Models;
+using BCrypt.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ✅ Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .AddSessionStateTempDataProvider(); // لدعم TempData مع Session
+
+builder.Services.AddHttpContextAccessor(); // لو احتجنا HttpContext في أي مكان
+builder.Services.AddHttpClient(); // 🟢 إضافة HttpClientFactory
 
 // ✅ Configure SQL Server connection
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ✅ Configure Session (يفضل تكون مع Authentication)
+// ✅ Configure Session
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(30);
@@ -19,28 +25,55 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
-// ✅ Configure Cookie Authentication (هذا المطلوب لحل المشكلة)
+// ✅ Configure Cookie Authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.LoginPath = "/Account/Login";           // إعادة التوجيه للLogin عند عدم المصادقة
-        options.LogoutPath = "/Account/Logout";         // مسار تسجيل الخروج
-        options.AccessDeniedPath = "/Account/AccessDenied"; // مسار الرفض
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(60);  // انتهاء صلاحية الكوكيز
-        options.SlidingExpiration = true;               // تجديد تلقائي للكوكيز
-        options.Cookie.HttpOnly = true;                 // حماية من XSS
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(60);
+        options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
     });
 
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// ✅ Configure the HTTP request pipeline - الترتيب مهم جداً!
+// ✅ Create default Admin user if not exists
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    context.Database.EnsureCreated();
+
+    if (!context.Users.Any(u => u.Role == UserRole.Admin))
+    {
+        var adminUser = new User
+        {
+            Name = "System Admin",
+            Email = "admin@clinic.com",
+            Password = BCrypt.Net.BCrypt.HashPassword("Admin123!"), // كلمة السر الافتراضية
+            Role = UserRole.Admin
+        };
+
+        context.Users.Add(adminUser);
+        context.SaveChanges();
+    }
+}
+
+// ✅ Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
+}
+else
+{
+    app.UseDeveloperExceptionPage();
 }
 
 app.UseHttpsRedirection();
@@ -48,12 +81,12 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-// ⚠️ الترتيب الصحيح مهم جداً
-app.UseSession();           // Session قبل Authentication
-app.UseAuthentication();    // Authentication قبل Authorization  
-app.UseAuthorization();     // Authorization في النهاية
+// ⚠️ الترتيب مهم
+app.UseSession();
+app.UseAuthentication();
+app.UseAuthorization();
 
-// ✅ Default route → بدء من Login بدلاً من Register
+// ✅ Default route
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Account}/{action=Login}/{id?}");

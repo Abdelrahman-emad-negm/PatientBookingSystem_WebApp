@@ -1,0 +1,103 @@
+﻿@model List<PatientBooking.Models.Appointment>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between mb-4">
+        <h2>Manage Appointments</h2>
+        <a class="btn btn-outline-secondary" href="/Admin/ExportAppointments">
+            <i class="fas fa-download"></i> Export
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            @if (Model.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover" id="appointmentsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Doctor</th>
+                                <th>Patient</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var app in Model)
+                            {
+                                <tr>
+                                    <td>@app.Date.ToString("yyyy-MM-dd")</td>
+                                    <td>@app.TimeSlot.ToString(@"hh\:mm")</td>
+                                    <td>@app.Doctor?.User?.Name</td>
+                                    <td>@app.Patient?.Name</td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(app.Status)">
+                                            @app.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            @if (app.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                            {
+                                                <button class="btn btn-success"
+                                                        onclick="updateAppointment(@app.AppointmentId, 'ConfirmBooking')">
+                                                    <i class="fas fa-check"></i> Confirm
+                                                </button>
+                                                <button class="btn btn-danger"
+                                                        onclick="updateAppointment(@app.AppointmentId, 'RejectBooking')">
+                                                    <i class="fas fa-times"></i> Reject
+                                                </button>
+                                            }
+                                            @if (app.Status == PatientBooking.Models.AppointmentStatus.Confirmed
+                                                                                || app.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                            {
+                                                <button class="btn btn-secondary"
+                                                        onclick="updateAppointment(@app.AppointmentId, 'CancelBooking')">
+                                                    <i class="fas fa-ban"></i> Cancel
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    No appointments found.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetStatusBadgeClass(PatientBooking.Models.AppointmentStatus status)
+    {
+        return status switch
+        {
+            PatientBooking.Models.AppointmentStatus.Pending => "bg-warning text-dark",
+            PatientBooking.Models.AppointmentStatus.Confirmed => "bg-success",
+            PatientBooking.Models.AppointmentStatus.Cancelled => "bg-secondary",
+            PatientBooking.Models.AppointmentStatus.Available => "bg-primary",
+            _ => "bg-info"
+        };
+    }
+}
+
+@section Scripts {
+    <script>
+        function updateAppointment(id, action) {
+            if (confirm(`Are you sure you want to ${action.replace('Booking','').toLowerCase()} this appointment?`)) {
+                $.post(`/Admin/${action}/${id}`, function() {
+                    location.reload();
+                });
+            }
+        }
+    </script>
+}

@@ -1,0 +1,71 @@
+﻿@model List<PatientBooking.Models.Appointment>
+
+@{
+    ViewData["Title"] = "Today's Appointments";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var doctorName = ViewBag.DoctorName as string ?? "Doctor";
+}
+
+<div class="container mt-5">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-calendar-day text-primary"></i> Today's Appointments - @doctorName
+    </h2>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle"></i> No appointments for today.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Patient</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Model)
+                    {
+                        var statusClass = a.Status switch
+                        {
+                            PatientBooking.Models.AppointmentStatus.Confirmed => "badge bg-success",
+                            PatientBooking.Models.AppointmentStatus.Pending => "badge bg-warning text-dark",
+                            PatientBooking.Models.AppointmentStatus.Cancelled => "badge bg-danger",
+                            PatientBooking.Models.AppointmentStatus.Available => "badge bg-primary",
+                            _ => "badge bg-light text-dark"
+                        };
+
+
+                        <tr>
+                            <td>@a.Patient?.Name ?? "N/A"</td>
+                            <td>@a.Date.ToString("dd/MM/yyyy")</td>
+                            <td>@a.TimeSlot.ToString(@"hh\\:mm")</td>
+                            <td><span class="@statusClass">@a.Status.ToString()</span></td>
+                            <td class="text-center">
+                                <form asp-action="UpdateAppointmentStatus" method="post" class="d-inline">
+                                    <input type="hidden" name="appointmentId" value="@a.AppointmentId" />
+                                    <select name="status" class="form-select form-select-sm d-inline w-auto" onchange="this.form.submit()">
+                                        <option value="">-- Change Status --</option>
+                                        <option value="Confirmed">Confirm</option>
+                                        <option value="Completed">Complete</option>
+                                        <option value="Cancelled">Cancel</option>
+                                        <option value="NoShow">No Show</option>
+                                    </select>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">

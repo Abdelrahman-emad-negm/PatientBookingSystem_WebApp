@@ -1,7 +1,18 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace PatientBooking.Models
 {
+    public enum UserRole
+    {
+        Patient,
+        Doctor,
+        Admin
+    }
+
+    [Index(nameof(Email), IsUnique = true)] // جعل الإيميل فريد
     public class User
     {
         [Key]
@@ -9,12 +20,12 @@ namespace PatientBooking.Models
 
         [Required(ErrorMessage = "Name is required")]
         [MaxLength(100)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email format")]
         [MaxLength(150)]
-        public string Email { get; set; }
+        public string Email { get; set; } = string.Empty;
 
         [Phone(ErrorMessage = "Invalid phone number format")]
         [MaxLength(20)]
@@ -22,13 +33,14 @@ namespace PatientBooking.Models
 
         [Required(ErrorMessage = "Password is required")]
         [DataType(DataType.Password)]
-        public string Password { get; set; }
+        public string Password { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Role is required")]
-        [MaxLength(50)]
-        public string Role { get; set; }
+        public UserRole Role { get; set; } = UserRole.Patient; // افتراضي مريض
 
-        // علاقة One-to-One مع Doctor (لو المستخدم دكتور)
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        // علاقة One-to-One مع Doctor (اختياري)
         public Doctor? DoctorProfile { get; set; }
     }
 }

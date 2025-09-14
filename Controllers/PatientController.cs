@@ -4,148 +4,160 @@ using Microsoft.EntityFrameworkCore;
 using PatientBooking.Data;
 using PatientBooking.Models;
 using System.Security.Claims;
-using System.Linq;
+using System.Text.Json;
+using System.Net.Http;
 
 namespace PatientBooking.Controllers
 {
-    [Authorize] // ✅ حماية كل الـ Controller
+    [Authorize(Roles = "Patient")]
     public class PatientController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public PatientController(AppDbContext context)
+        public PatientController(AppDbContext context, IHttpClientFactory httpClientFactory)
         {
             _context = context;
+            _httpClientFactory = httpClientFactory;
         }
 
-        // ✅ دالة محدثة للحصول على Patient ID من Claims
         private int? GetPatientIdFromUser()
         {
-            // ✅ التحقق من الـ Claims أولاً
-            if (User.Identity.IsAuthenticated)
+            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out int userId) &&
+                User.FindFirstValue(ClaimTypes.Role) == "Patient")
             {
-                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-                if (userRole == "Patient" && int.TryParse(userIdClaim, out int userId))
-                {
-                    return userId;
-                }
+                return userId;
             }
 
-            // ✅ التحقق من Session كنسخة احتياطية
             var sessionRole = HttpContext.Session.GetString("UserRole");
             var sessionUserId = HttpContext.Session.GetInt32("UserId");
-
-            if (sessionRole == "Patient" && sessionUserId.HasValue)
-            {
-                return sessionUserId.Value;
-            }
-
-            return null;
+            return (sessionRole == "Patient") ? sessionUserId : null;
         }
 
-        // ✅ التحقق من أن المستخدم مريض
-        private bool IsPatient()
-        {
-            var userRole = User.FindFirst(ClaimTypes.Role)?.Value ??
-                          HttpContext.Session.GetString("UserRole");
-            return userRole == "Patient";
-        }
-
-        // ✅ Dashboard المريض
-        [Authorize(Roles = "Patient")] // ✅ حماية إضافية للمرضى فقط
         public IActionResult Dashboard()
         {
-            if (!IsPatient())
-            {
-                return RedirectToAction("Login", "Account");
-            }
-
             var patientId = GetPatientIdFromUser();
-            if (patientId == null)
-            {
-                return RedirectToAction("Login", "Account");
-            }
+            if (patientId == null) return RedirectToAction("Login", "Account");
 
-            // ✅ عرض المواعيد المتاحة
             var availableAppointments = _context.Appointments
-                .Include(a => a.Doctor)
-                    .ThenInclude(d => d.User)
-                .Include(a => a.Doctor.Specialty)
-                .Where(a => a.Status == "Available" && a.Date >= DateTime.Today)
+                .AsNoTracking()
+                .Include(a => a.Doctor).ThenInclude(d => d.User)
+                .Where(a => a.Status == AppointmentStatus.Available && a.Date >= DateTime.Today)
                 .OrderBy(a => a.Date)
                 .ThenBy(a => a.TimeSlot)
                 .ToList();
 
-            // ✅ إرسال بيانات المستخدم للـ View
-            ViewBag.PatientName = User.FindFirst(ClaimTypes.Name)?.Value ??
-                                 HttpContext.Session.GetString("UserName");
+            ViewBag.PatientName = User.FindFirstValue(ClaimTypes.Name)
+                                  ?? HttpContext.Session.GetString("UserName")
+                                  ?? "Patient";
             ViewBag.PatientId = patientId;
 
             return View(availableAppointments);
         }
 
-        // ✅ صفحة الحجز - اختيار التخصص والدكتور
-        [Authorize(Roles = "Patient")]
         public IActionResult Booking()
         {
-            if (!IsPatient())
-            {
-                return RedirectToAction("Login", "Account");
-            }
-
-            // ✅ الحصول على جميع التخصصات
-            var specialties = _context.Specialties
-                .Include(s => s.Doctors)
-                    .ThenInclude(d => d.User)
+            // رجع Enum بدل الجدول القديم
+            var specialties = Enum.GetValues(typeof(SpecialtyEnum))
+                .Cast<SpecialtyEnum>()
+                .Select(s => s.ToString())
                 .ToList();
 
             return View(specialties);
         }
 
-        // ✅ الحصول على الأطباء حسب التخصص (AJAX)
+        // Advanced Booking Page
         [HttpGet]
-        [Authorize(Roles = "Patient")]
-        public IActionResult GetDoctorsBySpecialty(int specialtyId)
+        public IActionResult AdvancedBooking()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AdvancedBooking(string symptoms)
+        {
+            if (string.IsNullOrWhiteSpace(symptoms))
+            {
+                ViewBag.Error = "⚠ Please describe your symptoms.";
+                return View();
+            }
+
+            // جلب التخصصات من Enum
+            var specialtiesList = Enum.GetNames(typeof(SpecialtyEnum)).ToList();
+
+            // Prepare GPT OSS prompt
+            string prompt = $"Given the following list of medical specialties: {string.Join(", ", specialtiesList)}, " +
+                            $"and the patient's symptoms: '{symptoms}', suggest the most relevant specialties.";
+
+            // Call local GPT OSS API
+            var client = _httpClientFactory.CreateClient();
+            var response = await client.PostAsync("http://localhost:11434/api/generate",
+                new StringContent(JsonSerializer.Serialize(new
+                {
+                    model = "llama3", // Example: llama3 or any local model
+                    prompt = prompt,
+                    stream = false
+                }),
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                ViewBag.Error = "❌ Could not process your request. Please try again later.";
+                return View();
+            }
+
+            var jsonResponse = await response.Content.ReadAsStringAsync();
+            var gptResult = JsonDocument.Parse(jsonResponse).RootElement.GetProperty("response").GetString();
+
+            ViewBag.SuggestedSpecialties = gptResult;
+            ViewBag.Symptoms = symptoms;
+            return View();
+        }
+
+        [HttpGet]
+        public IActionResult GetDoctorsBySpecialty(SpecialtyEnum specialty)
         {
             var doctors = _context.Doctors
+                .AsNoTracking()
                 .Include(d => d.User)
-                .Where(d => d.SpecialtyId == specialtyId)
-                .Select(d => new {
-                    DoctorId = d.DoctorId,
+                .Where(d => d.Specialty == specialty)
+                .Select(d => new
+                {
+                    d.DoctorId,
                     Name = d.User.Name,
-                    ShortCV = d.ShortCV
+                    d.ShortCV,
+                    Photo = d.Photo ?? "/images/default-doctor.png"
                 })
                 .ToList();
 
             return Json(doctors);
         }
 
-        // ✅ الحصول على المواعيد المتاحة للطبيب (AJAX)
         [HttpGet]
-        [Authorize(Roles = "Patient")]
         public IActionResult GetAvailableSlots(int doctorId, DateTime date)
         {
-            // ✅ الحصول على ساعات عمل الطبيب
+            var dayEnum = (DayOfWeekEnum)date.DayOfWeek;
+
             var workingHours = _context.WorkingHours
-                .Where(w => w.DoctorId == doctorId && w.DayOfWeek == date.DayOfWeek.ToString())
-                .FirstOrDefault();
+                .AsNoTracking()
+                .FirstOrDefault(w => w.DoctorId == doctorId && w.DayOfWeek == dayEnum);
 
             if (workingHours == null)
-            {
                 return Json(new List<object>());
-            }
 
-            // ✅ الحصول على المواعيد المحجوزة
+            var startOfDay = date.Date;
+            var startOfNextDay = startOfDay.AddDays(1);
+
             var bookedAppointments = _context.Appointments
+                .AsNoTracking()
                 .Where(a => a.DoctorId == doctorId &&
-                           a.Date.Date == date.Date &&
-                           a.Status != "Cancelled")
+                            a.Date >= startOfDay &&
+                            a.Date < startOfNextDay &&
+                            a.Status != AppointmentStatus.Cancelled)
                 .Select(a => a.TimeSlot)
                 .ToList();
 
-            // ✅ إنشاء قائمة المواعيد المتاحة (كل 30 دقيقة)
             var availableSlots = new List<object>();
             var currentTime = workingHours.StartTime;
 
@@ -165,44 +177,43 @@ namespace PatientBooking.Controllers
             return Json(availableSlots);
         }
 
-        // ✅ حجز موعد
         [HttpPost]
-        [Authorize(Roles = "Patient")]
         public IActionResult Book(int id)
         {
             var patientId = GetPatientIdFromUser();
-            if (patientId == null)
-            {
-                return RedirectToAction("Login", "Account");
-            }
+            if (patientId == null) return RedirectToAction("Login", "Account");
 
             var appointment = _context.Appointments
-                .FirstOrDefault(a => a.AppointmentId == id && a.Status == "Available");
+                .FirstOrDefault(a => a.AppointmentId == id && a.Status == AppointmentStatus.Available);
 
-            if (appointment != null)
+            if (appointment == null)
             {
-                appointment.Status = "Pending"; // في انتظار موافقة الإدارة
-                appointment.PatientId = patientId.Value;
-                _context.SaveChanges();
+                TempData["Error"] = "❌ This appointment is no longer available.";
+                return RedirectToAction("Dashboard");
             }
 
+            if (appointment.Date.Date < DateTime.Today)
+            {
+                TempData["Error"] = "⚠ You cannot book a past appointment.";
+                return RedirectToAction("Dashboard");
+            }
+
+            appointment.Status = AppointmentStatus.Pending;
+            appointment.PatientId = patientId.Value;
+            _context.SaveChanges();
+
+            TempData["BookingSuccess"] = $"✅ Booking request sent successfully for {appointment.Date:dd/MM/yyyy} at {appointment.TimeSlot:hh\\:mm}.";
             return RedirectToAction("Dashboard");
         }
 
-        // ✅ عرض مواعيد المريض
-        [Authorize(Roles = "Patient")]
         public IActionResult MyAppointments()
         {
             var patientId = GetPatientIdFromUser();
-            if (patientId == null)
-            {
-                return RedirectToAction("Login", "Account");
-            }
+            if (patientId == null) return RedirectToAction("Login", "Account");
 
             var appointments = _context.Appointments
-                .Include(a => a.Doctor)
-                    .ThenInclude(d => d.User)
-                .Include(a => a.Doctor.Specialty)
+                .AsNoTracking()
+                .Include(a => a.Doctor).ThenInclude(d => d.User)
                 .Where(a => a.PatientId == patientId.Value)
                 .OrderByDescending(a => a.Date)
                 .ThenByDescending(a => a.TimeSlot)
@@ -211,35 +222,26 @@ namespace PatientBooking.Controllers
             return View(appointments);
         }
 
-        // ✅ إلغاء موعد
         [HttpPost]
-        [Authorize(Roles = "Patient")]
         public IActionResult CancelAppointment(int appointmentId)
         {
             var patientId = GetPatientIdFromUser();
             if (patientId == null)
-            {
-                return Json(new { success = false, message = "Patient not found" });
-            }
+                return Json(new { success = false, message = "⚠ Patient not found" });
 
             var appointment = _context.Appointments
-                .FirstOrDefault(a => a.AppointmentId == appointmentId &&
-                               a.PatientId == patientId.Value);
+                .FirstOrDefault(a => a.AppointmentId == appointmentId && a.PatientId == patientId.Value);
 
             if (appointment == null)
-            {
-                return Json(new { success = false, message = "Appointment not found" });
-            }
+                return Json(new { success = false, message = "❌ Appointment not found" });
 
-            if (appointment.Date <= DateTime.Today)
-            {
-                return Json(new { success = false, message = "Cannot cancel past appointments" });
-            }
+            if (appointment.Date.Date <= DateTime.Today)
+                return Json(new { success = false, message = "⚠ Cannot cancel past appointments" });
 
-            appointment.Status = "Cancelled";
+            appointment.Status = AppointmentStatus.Cancelled;
             _context.SaveChanges();
 
-            return Json(new { success = true, message = "Appointment cancelled successfully" });
+            return Json(new { success = true, message = "✅ Appointment cancelled successfully" });
         }
     }
 }

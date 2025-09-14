@@ -1,96 +1,268 @@
-﻿@model Tuple<List<PatientBooking.Models.Doctor>, List<PatientBooking.Models.Appointment>>
+﻿@model Tuple<
+List<PatientBooking.Models.Doctor>,
+    List<PatientBooking.Models.Appointment>,
+    List < PatientBooking.Models.SpecialtyEnum >
+>
 
 @{
     ViewData["Title"] = "Admin Dashboard";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<div class="container mt-5">
-    <div class="card shadow">
-        <div class="card-body">
-            <h2 class="mb-4 text-center">⚙️ Admin Dashboard</h2>
+<div class="container-fluid mt-4">
+    <h2 class="text-center mb-4 fw-bold">
+        ⚙️ Admin Dashboard
+    </h2>
 
-            <!-- Tabs Navigation -->
-            <ul class="nav nav-tabs" id="adminTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="doctors-tab" data-bs-toggle="tab" data-bs-target="#doctors" type="button" role="tab">👨‍⚕️ Doctors</button>
+    <div class="card shadow-lg border-0">
+        <div class="card-body">
+            <!-- Navigation Tabs -->
+            <ul class="nav nav-tabs nav-fill" id="adminTabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-doctors">
+                        👨‍⚕️ Manage Doctors
+                    </button>
                 </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="bookings-tab" data-bs-toggle="tab" data-bs-target="#bookings" type="button" role="tab">📅 Booked Appointments</button>
+                <li class="nav-item">
+                    <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-bookings">
+                        📅 Manage Appointments
+                    </button>
                 </li>
             </ul>
 
-            <div class="tab-content mt-4" id="adminTabsContent">
-
+            <div class="tab-content mt-4">
                 <!-- Doctors Tab -->
-                <div class="tab-pane fade show active" id="doctors" role="tabpanel">
-                    @if (Model.Item1 != null && Model.Item1.Count > 0)
+                <div class="tab-pane fade show active" id="tab-doctors">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold">Doctors List</h5>
+                        <button class="btn btn-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#doctorModal">
+                            ➕ Add Doctor
+                        </button>
+                    </div>
+                    @if (Model.Item1?.Count > 0)
                     {
-                        <table class="table table-bordered table-striped">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Specialty</th>
-                                    <th style="width: 100px;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var doctor in Model.Item1)
-                                {
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped align-middle">
+                                <thead class="table-primary">
                                     <tr>
-                                        <td>@doctor.User?.Name</td>
-                                        <td>@doctor.User?.Email</td>
-                                        <td>@doctor.Specialty?.Name</td>
-                                        <td>
-                                            <a asp-action="DeleteDoctor" asp-route-id="@doctor.DoctorId" class="btn btn-danger btn-sm"
-                                               onclick="return confirm('Are you sure you want to delete this doctor?');">
-                                                Delete
-                                            </a>
-                                        </td>
+                                        <th>Photo</th>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Specialty</th>
+                                        <th>Actions</th>
                                     </tr>
-                                }
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in Model.Item1)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <img src="@(string.IsNullOrEmpty(doc.Photo) ? "/images/default-doctor.png" : doc.Photo)"
+                                                     class="doctor-thumbnail" alt="@doc.User?.Name" />
+                                            </td>
+                                            <td class="fw-semibold">@doc.User?.Name</td>
+                                            <td>@doc.User?.Email</td>
+                                            <td><span class="badge bg-info">@doc.Specialty.ToString()</span></td>
+                                            <td>
+                                                <button class="btn btn-warning btn-sm"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#doctorModal"
+                                                        data-id="@doc.DoctorId"
+                                                        data-name="@doc.User?.Name"
+                                                        data-email="@doc.User?.Email"
+                                                        data-specialty="@doc.Specialty"
+                                                        data-photo="@doc.Photo"
+                                                        data-cv="@doc.ShortCV">
+                                                    ✏️ Edit
+                                                </button>
+                                                <form asp-action="DeleteDoctor" asp-route-id="@doc.DoctorId" method="post" class="d-inline"
+                                                      onsubmit="return confirm('Delete this doctor?');">
+                                                    <button type="submit" class="btn btn-danger btn-sm">🗑️ Delete</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     }
                     else
                     {
-                        <div class="alert alert-info text-center">No doctors available.</div>
+                        <div class="alert alert-info text-center shadow-sm">No doctors available.</div>
                     }
                 </div>
 
-                <!-- Bookings Tab -->
-                <div class="tab-pane fade" id="bookings" role="tabpanel">
-                    @if (Model.Item2 != null && Model.Item2.Count > 0)
+                <!-- Appointments Tab -->
+                <div class="tab-pane fade" id="tab-bookings">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold">Appointments Management</h5>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="exportAppointments()">
+                            ⬇️ Export CSV
+                        </button>
+                    </div>
+                    @if (Model.Item2?.Count > 0)
                     {
-                        <table class="table table-bordered table-striped">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                    <th>Doctor</th>
-                                    <th>Patient</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var item in Model.Item2)
-                                {
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover align-middle">
+                                <thead class="table-primary">
                                     <tr>
-                                        <td>@item.Date.ToShortDateString()</td>
-                                        <td>@item.TimeSlot</td>
-                                        <td>@item.Doctor?.User?.Name ?? "N/A"</td>
-                                        <td>@item.Patient?.Name ?? "N/A"</td>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Doctor</th>
+                                        <th>Patient</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
                                     </tr>
-                                }
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    @foreach (var appt in Model.Item2)
+                                    {
+                                        <tr>
+                                            <td>@appt.Date.ToString("yyyy-MM-dd")</td>
+                                            <td>@appt.TimeSlot.ToString(@"hh\:mm")</td>
+                                            <td>@appt.Doctor?.User?.Name ?? "—"</td>
+                                            <td>@appt.Patient?.Name ?? "—"</td>
+                                            <td>
+                                                <span class="badge @(appt.Status == PatientBooking.Models.AppointmentStatus.Pending ? "bg-warning text-dark" :
+                                                                                                                                                                             appt.Status == PatientBooking.Models.AppointmentStatus.Confirmed ? "bg-success" :
+                                                                                                                                                                             appt.Status == PatientBooking.Models.AppointmentStatus.Cancelled ? "bg-danger" : "bg-secondary")">
+                                            @appt.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            @if (appt.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                                    {
+                                                        <button class="btn btn-success" onclick="updateBooking(@appt.AppointmentId, 'ConfirmBooking')">✔️ Confirm</button>
+                                                        <button class="btn btn-danger" onclick="updateBooking(@appt.AppointmentId, 'RejectBooking')">❌ Reject</button>
+                                                    }
+                                                    @if (appt.Status == PatientBooking.Models.AppointmentStatus.Confirmed || appt.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                                    {
+                                                        <button class="btn btn-secondary" onclick="updateBooking(@appt.AppointmentId, 'CancelBooking')">🚫 Cancel</button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
                     }
                     else
                     {
-                        <div class="alert alert-info text-center">No appointments booked yet.</div>
+                        <div class="alert alert-info text-center shadow-sm">No appointments found.</div>
                     }
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Doctor Modal (Add/Edit) -->
+<div class="modal fade" id="doctorModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form asp-action="SaveDoctor" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="DoctorId" id="doctorId" />
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Doctor</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Name</label>
+                            <input name="DoctorName" id="doctorName" class="form-control" required />
+
+                            <label class="form-label mt-2">Email</label>
+                            <input name="DoctorEmail" id="doctorEmail" type="email" class="form-control" required />
+
+                            <label class="form-label mt-2">Password</label>
+                            <input name="DoctorPassword" type="password" class="form-control" />
+                            <small class="text-muted">Leave blank if not changing</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Specialty</label>
+                            <select name="Specialty" id="doctorSpecialty" class="form-select" required>
+                                @foreach (var s in Model.Item3)
+                                {
+                                    <option value="@s">@s</option>
+                                }
+                            </select>
+
+                            <label class="form-label mt-2">Photo</label>
+                            <input name="PhotoFile" type="file" class="form-control" accept="image/*" />
+
+                            <label class="form-label mt-2">Short CV</label>
+                            <textarea name="ShortCV" id="doctorCV" class="form-control"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Fill doctor modal (Add/Edit)
+        var doctorModal = document.getElementById('doctorModal');
+        doctorModal.addEventListener('show.bs.modal', function (event) {
+            var btn = event.relatedTarget;
+            if (btn.getAttribute('data-id')) {
+                // Edit
+                document.getElementById('doctorId').value = btn.getAttribute('data-id');
+                document.getElementById('doctorName').value = btn.getAttribute('data-name');
+                document.getElementById('doctorEmail').value = btn.getAttribute('data-email');
+                document.getElementById('doctorSpecialty').value = btn.getAttribute('data-specialty');
+                document.getElementById('doctorCV').value = btn.getAttribute('data-cv') || '';
+            } else {
+                // Add
+                document.getElementById('doctorId').value = 0;
+                document.getElementById('doctorName').value = '';
+                document.getElementById('doctorEmail').value = '';
+                document.getElementById('doctorSpecialty').selectedIndex = 0;
+                document.getElementById('doctorCV').value = '';
+            }
+        });
+
+        // Update booking status
+        function updateBooking(id, action) {
+            fetch(`/Admin/${action}/${id}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) location.reload();
+                    else alert("Failed to update booking");
+                });
+        }
+
+        // Export Appointments
+        function exportAppointments() {
+            window.location.href = "/Admin/ExportAppointments";
+        }
+    </script>
+}
+
+@section Styles {
+    <style>
+        .doctor-thumbnail {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .nav-tabs .nav-link {
+            font-size: 1rem;
+        }
+
+            .nav-tabs .nav-link.active {
+                background-color: #0d6efd;
+                color: #fff;
+            }
+    </style>
+}

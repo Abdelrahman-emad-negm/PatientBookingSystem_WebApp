@@ -1,10 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PatientBooking.Data;
 using PatientBooking.Models;
 using System.Security.Claims;
-using Microsoft.Extensions.Logging;
 
 namespace PatientBooking.Controllers
 {
@@ -20,20 +19,31 @@ namespace PatientBooking.Controllers
             _logger = logger;
         }
 
+        /// <summary>
+        /// استرجاع رقم الدكتور الحالي من الـ Claims أو الـ Session
+        /// </summary>
         private int? GetDoctorIdFromUser()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out int userId))
+            try
             {
-                var doctor = _context.Doctors.FirstOrDefault(d => d.UserId == userId);
-                if (doctor != null) return doctor.DoctorId;
-            }
+                // من الـ Claims
+                if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out int userId) &&
+                    User.FindFirstValue(ClaimTypes.Role) == "Doctor")
+                {
+                    return _context.Doctors.FirstOrDefault(d => d.UserId == userId)?.DoctorId;
+                }
 
-            var sessionUserId = HttpContext.Session.GetInt32("UserId");
-            if (sessionUserId.HasValue)
+                // من الـ Session (fallback)
+                var sessionUserId = HttpContext.Session.GetInt32("UserId");
+                var sessionRole = HttpContext.Session.GetString("UserRole");
+                if (sessionUserId.HasValue && sessionRole == "Doctor")
+                {
+                    return _context.Doctors.FirstOrDefault(d => d.UserId == sessionUserId.Value)?.DoctorId;
+                }
+            }
+            catch (Exception ex)
             {
-                var doctor = _context.Doctors.FirstOrDefault(d => d.UserId == sessionUserId.Value);
-                if (doctor != null) return doctor.DoctorId;
+                _logger.LogError(ex, "Error retrieving DoctorId");
             }
 
             _logger.LogWarning("DoctorId not found for current user");
@@ -47,10 +57,13 @@ namespace PatientBooking.Controllers
 
             var doctor = _context.Doctors
                                  .Include(d => d.User)
-                                 .Include(d => d.Specialty)
                                  .FirstOrDefault(d => d.DoctorId == doctorId.Value);
 
-            if (doctor == null) return RedirectToAction("Login", "Account");
+            if (doctor == null)
+            {
+                _logger.LogWarning("Doctor record not found for DoctorId: {DoctorId}", doctorId);
+                return RedirectToAction("Login", "Account");
+            }
 
             var appointments = _context.Appointments
                                        .Include(a => a.Patient)
@@ -61,45 +74,81 @@ namespace PatientBooking.Controllers
 
             ViewBag.Doctor = doctor;
             ViewBag.DoctorName = doctor.User?.Name ?? "Doctor";
-            ViewBag.Specialty = doctor.Specialty?.Name ?? "No Specialty";
+            ViewBag.Specialty = doctor.Specialty.ToString();
             ViewBag.Error = TempData["Error"];
             ViewBag.Success = TempData["Success"];
 
-            var appointmentForm = new Appointment();
-            return View(Tuple.Create(appointmentForm, appointments));
+            return View(Tuple.Create(new Appointment(), appointments));
         }
 
+        /// <summary>
+        /// يبني slots كل 30 دقيقة بين startTime و endTime في التاريخ المحدد
+        /// </summary>
         [HttpPost]
-        public IActionResult AddAppointment(Appointment appointment)
+        [ValidateAntiForgeryToken]
+        public IActionResult AddAppointmentsRange(DateTime date, TimeSpan startTime, TimeSpan endTime)
         {
             var doctorId = GetDoctorIdFromUser();
-            if (doctorId == null) return RedirectToAction("Login", "Account");
+            if (doctorId == null)
+                return RedirectToAction("Login", "Account");
 
-            if (!ModelState.IsValid)
+            startTime = new TimeSpan(startTime.Hours, startTime.Minutes, 0);
+            endTime = new TimeSpan(endTime.Hours, endTime.Minutes, 0);
+
+            if (endTime <= startTime)
             {
-                TempData["Error"] = "Invalid appointment data.";
+                TempData["Error"] = "End time must be after start time.";
                 return RedirectToAction("DoctorDashboard");
             }
 
-            var exists = _context.Appointments.FirstOrDefault(a =>
-                a.DoctorId == doctorId.Value &&
-                a.Date.Date == appointment.Date.Date &&
-                a.TimeSlot == appointment.TimeSlot);
-
-            if (exists != null)
+            if (date.Date < DateTime.Today)
             {
-                TempData["Error"] = "There is already an appointment at this time!";
+                TempData["Error"] = "You cannot add slots in the past.";
                 return RedirectToAction("DoctorDashboard");
             }
 
-            appointment.DoctorId = doctorId.Value;
-            appointment.Status = "Available";
-            appointment.PatientId = 0;
+            var slotLength = TimeSpan.FromMinutes(30);
+            var newSlots = new List<Appointment>();
+            int skipped = 0;
 
-            _context.Appointments.Add(appointment);
-            _context.SaveChanges();
+            for (var time = startTime; time < endTime; time = time.Add(slotLength))
+            {
+                bool exists = _context.Appointments.Any(a =>
+                    a.DoctorId == doctorId.Value &&
+                    a.Date == date.Date &&
+                    a.TimeSlot == time);
 
-            TempData["Success"] = "Appointment added successfully!";
+                if (!exists)
+                {
+                    newSlots.Add(new Appointment
+                    {
+                        DoctorId = doctorId.Value,
+                        Date = date.Date,
+                        TimeSlot = time,
+                        Status = AppointmentStatus.Available,
+                        PatientId = null
+                    });
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+
+            if (newSlots.Any())
+            {
+                _context.Appointments.AddRange(newSlots);
+                _context.SaveChanges();
+
+                var msg = $"{newSlots.Count} appointment slot(s) added successfully.";
+                if (skipped > 0) msg += $" ({skipped} existing slot(s) skipped)";
+                TempData["Success"] = msg;
+            }
+            else
+            {
+                TempData["Error"] = "No new slots added (all selected slots already exist).";
+            }
+
             return RedirectToAction("DoctorDashboard");
         }
 
@@ -108,11 +157,12 @@ namespace PatientBooking.Controllers
             var doctorId = GetDoctorIdFromUser();
             if (doctorId == null) return RedirectToAction("Login", "Account");
 
+            var today = DateTime.Today;
             var todayAppointments = _context.Appointments
                                             .Include(a => a.Patient)
                                             .Where(a => a.DoctorId == doctorId.Value &&
-                                                   a.Date.Date == DateTime.Today &&
-                                                   a.Status == "Confirmed")
+                                                        a.Date == today &&
+                                                        (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed))
                                             .OrderBy(a => a.TimeSlot)
                                             .ToList();
 
@@ -130,8 +180,8 @@ namespace PatientBooking.Controllers
             var weeklyAppointments = _context.Appointments
                                              .Include(a => a.Patient)
                                              .Where(a => a.DoctorId == doctorId.Value &&
-                                                    a.Date >= startOfWeek &&
-                                                    a.Date < endOfWeek)
+                                                         a.Date >= startOfWeek &&
+                                                         a.Date < endOfWeek)
                                              .OrderBy(a => a.Date)
                                              .ThenBy(a => a.TimeSlot)
                                              .ToList();
@@ -143,20 +193,22 @@ namespace PatientBooking.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public IActionResult UpdateAppointmentStatus(int appointmentId, string status)
         {
             var doctorId = GetDoctorIdFromUser();
             if (doctorId == null) return Json(new { success = false, message = "Doctor not found" });
 
-            var validStatuses = new[] { "Completed", "Cancelled", "No Show", "Confirmed" };
-            if (!validStatuses.Contains(status)) return Json(new { success = false, message = "Invalid status" });
+            if (!Enum.TryParse<AppointmentStatus>(status, true, out var parsedStatus))
+                return Json(new { success = false, message = "Invalid status" });
 
             var appointment = _context.Appointments.FirstOrDefault(a =>
                 a.AppointmentId == appointmentId && a.DoctorId == doctorId.Value);
 
-            if (appointment == null) return Json(new { success = false, message = "Appointment not found" });
+            if (appointment == null)
+                return Json(new { success = false, message = "Appointment not found" });
 
-            appointment.Status = status;
+            appointment.Status = parsedStatus;
             _context.SaveChanges();
 
             return Json(new { success = true, message = "Appointment status updated successfully" });
@@ -168,12 +220,19 @@ namespace PatientBooking.Controllers
             if (doctorId == null) return RedirectToAction("Login", "Account");
 
             var appointment = _context.Appointments.FirstOrDefault(a =>
-                a.AppointmentId == id && a.DoctorId == doctorId.Value && a.Status == "Available");
+                a.AppointmentId == id &&
+                a.DoctorId == doctorId.Value &&
+                a.Status == AppointmentStatus.Available);
 
             if (appointment != null)
             {
                 _context.Appointments.Remove(appointment);
                 _context.SaveChanges();
+                TempData["Success"] = "Appointment deleted.";
+            }
+            else
+            {
+                TempData["Error"] = "Appointment not found or cannot be deleted.";
             }
 
             return RedirectToAction("DoctorDashboard");

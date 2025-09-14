@@ -1,8 +1,20 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PatientBooking.Models
 {
+    public enum DayOfWeekEnum
+    {
+        Sunday = 0,
+        Monday = 1,
+        Tuesday = 2,
+        Wednesday = 3,
+        Thursday = 4,
+        Friday = 5,
+        Saturday = 6
+    }
+
     public class WorkingHour
     {
         [Key]
@@ -10,12 +22,13 @@ namespace PatientBooking.Models
 
         [Required]
         public int DoctorId { get; set; }
-        public Doctor Doctor { get; set; }
+
+        [ForeignKey(nameof(DoctorId))]
+        public Doctor Doctor { get; set; } = null!;
 
         [Required(ErrorMessage = "Day of the week is required")]
-        [MaxLength(20)]
         [Display(Name = "Day of Week")]
-        public string DayOfWeek { get; set; } // مثال: "Monday", "Tuesday"...
+        public DayOfWeekEnum DayOfWeek { get; set; }
 
         [Required(ErrorMessage = "Start time is required")]
         [DataType(DataType.Time)]
@@ -26,5 +39,8 @@ namespace PatientBooking.Models
         [DataType(DataType.Time)]
         [Display(Name = "End Time")]
         public TimeSpan EndTime { get; set; }
+
+        [NotMapped]
+        public bool IsValid => EndTime > StartTime;
     }
 }
