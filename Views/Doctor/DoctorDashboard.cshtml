@@ -1,38 +1,42 @@
-﻿@model Tuple<PatientBooking.Models.Appointment, List<PatientBooking.Models.Appointment>>
+﻿@model Dictionary<PatientBooking.Models.AppointmentStatus, List<PatientBooking.Models.Appointment>>
 
 @{
     ViewData["Title"] = "Doctor Dashboard";
     Layout = "~/Views/Shared/_Layout.cshtml";
-    var appointments = Model.Item2;
+    var doctorPhoto = string.IsNullOrEmpty(ViewBag.Photo as string) ? "/images/default-doctor.png" : ViewBag.Photo;
+    var today = DateTime.Today;
+    var now = DateTime.Now;
 }
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <div class="container py-4">
-    <!-- Doctor Profile Header -->
+    <!-- Doctor Header -->
     <div class="doctor-header card border-0 shadow mb-4">
-        <div class="card-body p-4">
+        <div class="card-body p-4 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center">
-                <div class="doctor-avatar me-4">
-                    <div class="avatar-circle bg-primary text-white">
-                        <i class="fas fa-user-md fa-2x"></i>
-                    </div>
+                <div class="doctor-avatar me-3">
+                    <img src="@doctorPhoto"
+                         alt="Doctor Photo"
+                         class="rounded-circle border shadow-sm"
+                         style="width:70px; height:70px; object-fit:cover;" />
                 </div>
                 <div>
                     <h2 class="mb-1">Doctor Dashboard</h2>
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-success me-2">
-                            <i class="fas fa-circle me-1"></i> Online
-                        </span>
-                        <span class="text-muted">
-                            <i class="far fa-calendar-alt me-1"></i> @DateTime.Now.ToString("dd MMM yyyy")
-                        </span>
-                    </div>
+                    <span class="badge bg-success">
+                        <i class="fas fa-circle me-1"></i> Online
+                    </span>
                 </div>
+            </div>
+            <div>
+                <span class="text-muted">
+                    <i class="far fa-calendar-alt me-1"></i> @DateTime.Now.ToString("dd MMM yyyy")
+                </span>
             </div>
         </div>
     </div>
 
+    <!-- Alerts -->
     @if (ViewBag.Error != null)
     {
         <div class="alert alert-danger alert-dismissible fade show">
@@ -48,12 +52,10 @@
         </div>
     }
 
-    <!-- Add Appointments Range Card -->
+    <!-- Add Slots Form -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">
-                <i class="fas fa-plus-circle me-2"></i> Add Available Slots (30 min each)
-            </h5>
+            <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i> Add Available Slots</h5>
         </div>
         <div class="card-body">
             <form asp-action="AddAppointmentsRange" method="post">
@@ -61,27 +63,22 @@
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Date</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="far fa-calendar"></i></span>
-                            <input type="date" name="date"
-                                   value="@DateTime.Now.ToString("yyyy-MM-dd")"
-                                   min="@DateTime.Now.ToString("yyyy-MM-dd")"
-                                   class="form-control" required />
-                        </div>
+                        <input type="date" name="date" class="form-control"
+                               value="@today.ToString("yyyy-MM-dd")"
+                               min="@today.ToString("yyyy-MM-dd")" required />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Start Time</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="far fa-clock"></i></span>
-                            <input type="time" name="startTime" class="form-control" required />
-                        </div>
+                        <input type="time" name="startTime" class="form-control"
+                               value="@now.ToString("HH:mm")"
+                               min="@now.ToString("HH:mm")"
+                               required />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">End Time</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="far fa-clock"></i></span>
-                            <input type="time" name="endTime" class="form-control" required />
-                        </div>
+                        <input type="time" name="endTime" class="form-control"
+                               min="@now.ToString("HH:mm")"
+                               required />
                     </div>
                 </div>
                 <div class="mt-3">
@@ -93,103 +90,125 @@
         </div>
     </div>
 
-    <!-- Appointments Table Card -->
+    <!-- Appointments Tabs -->
     <div class="card shadow-sm">
         <div class="card-header bg-white border-bottom-0">
-            <div class="d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-calendar-alt me-2 text-primary"></i> My Appointments
-                </h5>
-            </div>
+            <h5 class="mb-0"><i class="fas fa-calendar-alt me-2 text-primary"></i> My Appointments</h5>
         </div>
         <div class="card-body">
-            @if (!appointments.Any())
-            {
-                <div class="text-center py-5">
-                    <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No appointments scheduled yet</h5>
-                    <p class="text-muted">Add available time slots for patients to book</p>
-                </div>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Date</th>
-                                <th>Time</th>
-                                <th>Status</th>
-                                <th>Patient</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var a in appointments)
-                            {
-                                string badgeClass = a.Status switch
-                                {
-                                    PatientBooking.Models.AppointmentStatus.Available => "bg-success",
-                                    PatientBooking.Models.AppointmentStatus.Pending => "bg-warning text-dark",
-                                    PatientBooking.Models.AppointmentStatus.Confirmed => "bg-primary",
-                                    PatientBooking.Models.AppointmentStatus.Cancelled => "bg-secondary",
-                                  
-                                    _ => "bg-light text-dark"
-                                };
+            <ul class="nav nav-tabs mb-3" id="apptTabs">
+                @foreach (var status in Model.Keys)
+                {
+                    <li class="nav-item">
+                        <button class="nav-link @(status == Model.Keys.First() ? "active" : "")"
+                                data-bs-toggle="tab" data-bs-target="#tab-@status">
+                            @status
+                        </button>
+                    </li>
+                }
+            </ul>
 
-                                <tr>
-                                    <td>@a.Date.ToString("dd MMM yyyy")</td>
-                                    <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
-                                    <td>
-                                        <span class="badge @badgeClass">
-                                            @if (a.Status == PatientBooking.Models.AppointmentStatus.Pending)
+            <div class="tab-content">
+                @foreach (var status in Model.Keys)
+                {
+                    var appts = Model[status];
+                    <div class="tab-pane fade @(status == Model.Keys.First() ? "show active" : "")" id="tab-@status">
+                        @if (!appts.Any())
+                        {
+                            <div class="alert alert-info text-center">No @status appointments</div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Time</th>
+                                            <th>Patient</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var a in appts)
+                                        {
+                                            bool isPast = a.Date < today || (a.Date == today && a.TimeSlot < now.TimeOfDay);
+                                            string rowClass = isPast ? "table-secondary text-muted" : "";
+                                            string badgeClass = a.Status switch
                                             {
-                                                <i class="fas fa-hourglass-half me-1"></i>
-                                            }
-                                            else if (a.Status == PatientBooking.Models.AppointmentStatus.Confirmed)
-                                            {
-                                                <i class="fas fa-check-circle me-1"></i>
-                                            }
-                                            @a.Status.ToString()
-                                        </span>
-                                    </td>
-                                    <td>
-                                        @if (a.Patient != null)
-                                        {
-                                            <div class="d-flex align-items-center">
-                                                <div class="avatar-circle-sm bg-info text-white me-2">
-                                                    <i class="fas fa-user"></i>
-                                                </div>
-                                                <span>@a.Patient.Name</span>
-                                            </div>
+                                                PatientBooking.Models.AppointmentStatus.Available => "bg-success",
+                                                PatientBooking.Models.AppointmentStatus.Pending => "bg-warning text-dark",
+                                                PatientBooking.Models.AppointmentStatus.Confirmed => "bg-primary",
+                                                PatientBooking.Models.AppointmentStatus.Completed => "bg-secondary",
+                                                PatientBooking.Models.AppointmentStatus.Rejected => "bg-danger",
+                                                _ => "bg-light text-dark"
+                                            };
+
+                                            <tr class="@rowClass">
+                                                <td>@a.Date.ToString("dd MMM yyyy")</td>
+                                                <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
+                                                <td>@(a.Patient?.Name ?? "—")</td>
+                                                <td><span class="badge @badgeClass">@a.Status</span></td>
+                                                <td>
+                                                    @if (!isPast)
+                                                    {
+                                                        if (a.Status == PatientBooking.Models.AppointmentStatus.Available ||
+                                                        a.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                                        {
+                                                            <button class="btn btn-sm btn-outline-danger"
+                                                                    onclick="confirmDelete(@a.AppointmentId)">
+                                                                <i class="fas fa-trash-alt"></i>
+                                                            </button>
+                                                        }
+                                                        else if (a.Status == PatientBooking.Models.AppointmentStatus.Confirmed)
+                                                        {
+                                                            <button class="btn btn-sm btn-outline-success"
+                                                                    onclick="markCompleted(@a.AppointmentId)">
+                                                                <i class="fas fa-check"></i> Completed
+                                                            </button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">—</span>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">Expired</span>
+                                                    }
+                                                </td>
+                                            </tr>
                                         }
-                                        else
-                                        {
-                                            <span class="text-muted">—</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (a.Status == PatientBooking.Models.AppointmentStatus.Available)
-                                        {
-                                            <button class="btn btn-sm btn-outline-danger"
-                                                    onclick="confirmDelete(@a.AppointmentId)">
-                                                <i class="fas fa-trash-alt"></i>
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">—</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        function confirmDelete(id) {
+            if (confirm('Delete this slot?')) {
+                window.location.href = '/Doctor/DeleteAppointment/' + id;
+            }
+        }
+
+        function markCompleted(id) {
+            fetch('/Doctor/MarkAsCompleted/' + id, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.message);
+                    if (data.success) location.reload();
+                });
+        }
+    </script>
+}
 
 <style>
     .doctor-header {
@@ -197,38 +216,10 @@
         border-radius: 10px;
     }
 
-    .avatar-circle {
-        width: 80px;
-        height: 80px;
+    .doctor-avatar img {
+        width: 70px;
+        height: 70px;
         border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .avatar-circle-sm {
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.8rem;
-    }
-
-    .badge {
-        font-weight: 500;
-        padding: 5px 10px;
-        border-radius: 4px;
+        object-fit: cover;
     }
 </style>
-
-@section Scripts {
-    <script>
-        function confirmDelete(id) {
-            if (confirm('Are you sure you want to delete this appointment slot?')) {
-                window.location.href = '/Doctor/DeleteAppointment/' + id;
-            }
-        }
-    </script>
-}

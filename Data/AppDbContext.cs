@@ -14,42 +14,42 @@ namespace PatientBooking.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // جعل الإيميل فريد
+            // ✅ جعل الإيميل فريد
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
                 .IsUnique();
 
-            // Doctor ↔ User (One-to-One)
+            // ✅ Doctor ↔ User (One-to-One)
             modelBuilder.Entity<Doctor>()
                 .HasOne(d => d.User)
-                .WithOne()
+                .WithOne(u => u.DoctorProfile) // ربطنا بالعلاقة اللي جوه User
                 .HasForeignKey<Doctor>(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // ❌ حذف علاقة Doctor ↔ Specialty لأنها أصبحت Enum
+            // ❌ ما فيش جدول Specialties (اتحول Enum)
 
-            // Appointment ↔ Patient (Many-to-One) - Optional
+            // ✅ Appointment ↔ Patient (Many-to-One) - Optional
             modelBuilder.Entity<Appointment>()
                 .HasOne(a => a.Patient)
-                .WithMany()
+                .WithMany() // مريض ممكن يبقى عنده كذا موعد
                 .HasForeignKey(a => a.PatientId)
-                .OnDelete(DeleteBehavior.Restrict)
+                .OnDelete(DeleteBehavior.Restrict) // ما نلغيهوش لو المريض اتمسح
                 .IsRequired(false);
 
-            // Appointment ↔ Doctor (Many-to-One)
+            // ✅ Appointment ↔ Doctor (Many-to-One)
             modelBuilder.Entity<Appointment>()
                 .HasOne(a => a.Doctor)
                 .WithMany(d => d.Appointments)
                 .HasForeignKey(a => a.DoctorId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // تعيين القيمة الافتراضية للحالة وتخزينها كـ string
+            // ✅ نخزن الحالة كـ string ونخلي default Available
             modelBuilder.Entity<Appointment>()
                 .Property(a => a.Status)
-                .HasConversion<string>()   // enum يتحول لـ string
-                .HasDefaultValue(AppointmentStatus.Pending);
+                .HasConversion<string>()
+                .HasDefaultValue(AppointmentStatus.Available);
 
-            // WorkingHour ↔ Doctor (Many-to-One)
+            // ✅ WorkingHour ↔ Doctor (Many-to-One)
             modelBuilder.Entity<WorkingHour>()
                 .HasOne(w => w.Doctor)
                 .WithMany(d => d.WorkingHours)

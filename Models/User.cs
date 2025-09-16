@@ -34,11 +34,12 @@ namespace PatientBooking.Models
         [Required(ErrorMessage = "Password is required")]
         [DataType(DataType.Password)]
         public string Password { get; set; } = string.Empty;
+        // ⚡ ملاحظة: هنا هنخزن الـ Password بعد ما نعمله Hash بـ BCrypt
 
         [Required(ErrorMessage = "Role is required")]
         public UserRole Role { get; set; } = UserRole.Patient; // افتراضي مريض
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow; // نخزن بالتوقيت العالمي UTC
 
         // علاقة One-to-One مع Doctor (اختياري)
         public Doctor? DoctorProfile { get; set; }

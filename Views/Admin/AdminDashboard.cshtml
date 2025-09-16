@@ -28,6 +28,11 @@ List<PatientBooking.Models.Doctor>,
                         📅 Manage Appointments
                     </button>
                 </li>
+                <li class="nav-item">
+                    <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-slots">
+                        🕒 Pending Slots
+                    </button>
+                </li>
             </ul>
 
             <div class="tab-content mt-4">
@@ -115,7 +120,7 @@ List<PatientBooking.Models.Doctor>,
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var appt in Model.Item2)
+                                    @foreach (var appt in Model.Item2.Where(a => a.PatientId != null))
                                     {
                                         <tr>
                                             <td>@appt.Date.ToString("yyyy-MM-dd")</td>
@@ -124,8 +129,8 @@ List<PatientBooking.Models.Doctor>,
                                             <td>@appt.Patient?.Name ?? "—"</td>
                                             <td>
                                                 <span class="badge @(appt.Status == PatientBooking.Models.AppointmentStatus.Pending ? "bg-warning text-dark" :
-                                                                                                                                                                             appt.Status == PatientBooking.Models.AppointmentStatus.Confirmed ? "bg-success" :
-                                                                                                                                                                             appt.Status == PatientBooking.Models.AppointmentStatus.Cancelled ? "bg-danger" : "bg-secondary")">
+                                                                                                                                                           appt.Status == PatientBooking.Models.AppointmentStatus.Confirmed ? "bg-success" :
+                                                                                                                                                           appt.Status == PatientBooking.Models.AppointmentStatus.Cancelled ? "bg-danger" : "bg-secondary")">
                                             @appt.Status
                                         </span>
                                     </td>
@@ -151,6 +156,49 @@ List<PatientBooking.Models.Doctor>,
                     else
                     {
                         <div class="alert alert-info text-center shadow-sm">No appointments found.</div>
+                    }
+                </div>
+
+                <!-- Pending Slots Tab -->
+                <div class="tab-pane fade" id="tab-slots">
+                    <h5 class="fw-bold mb-3">Doctor Slots Awaiting Approval</h5>
+
+                    @if (Model.Item2.Any(a => a.Status == PatientBooking.Models.AppointmentStatus.Pending && a.PatientId == null))
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover align-middle">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Doctor</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var slot in Model.Item2.Where(a => a.Status == PatientBooking.Models.AppointmentStatus.Pending && a.PatientId == null))
+                                    {
+                                        <tr>
+                                            <td>@slot.Date.ToString("yyyy-MM-dd")</td>
+                                            <td>@slot.TimeSlot.ToString(@"hh\:mm")</td>
+                                            <td>@slot.Doctor?.User?.Name</td>
+                                            <td><span class="badge bg-warning text-dark">Pending</span></td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-success" onclick="updateSlot(@slot.AppointmentId, 'ApproveSlot')">✔️ Approve</button>
+                                                    <button class="btn btn-danger" onclick="updateSlot(@slot.AppointmentId, 'RejectSlot')">❌ Reject</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info text-center shadow-sm">No pending slots found.</div>
                     }
                 </div>
             </div>
@@ -237,6 +285,16 @@ List<PatientBooking.Models.Doctor>,
                 .then(data => {
                     if (data.success) location.reload();
                     else alert("Failed to update booking");
+                });
+        }
+
+        // Update slot status
+        function updateSlot(id, action) {
+            fetch(`/Admin/${action}/${id}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) location.reload();
+                    else alert("Failed to update slot");
                 });
         }
 

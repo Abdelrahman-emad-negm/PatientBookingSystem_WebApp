@@ -12,7 +12,7 @@ using PatientBooking.Data;
 namespace PatientBooking.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250905005030_InitialCreate")]
+    [Migration("20250915193351_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -50,7 +50,7 @@ namespace PatientBooking.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
-                        .HasDefaultValue("Pending");
+                        .HasDefaultValue("Available");
 
                     b.Property<TimeSpan>("TimeSlot")
                         .HasColumnType("time");
@@ -86,17 +86,10 @@ namespace PatientBooking.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("UserId1")
-                        .HasColumnType("int");
-
                     b.HasKey("DoctorId");
 
                     b.HasIndex("UserId")
                         .IsUnique();
-
-                    b.HasIndex("UserId1")
-                        .IsUnique()
-                        .HasFilter("[UserId1] IS NOT NULL");
 
                     b.ToTable("Doctors");
                 });
@@ -189,14 +182,10 @@ namespace PatientBooking.Migrations
             modelBuilder.Entity("PatientBooking.Models.Doctor", b =>
                 {
                     b.HasOne("PatientBooking.Models.User", "User")
-                        .WithOne()
+                        .WithOne("DoctorProfile")
                         .HasForeignKey("PatientBooking.Models.Doctor", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("PatientBooking.Models.User", null)
-                        .WithOne("DoctorProfile")
-                        .HasForeignKey("PatientBooking.Models.Doctor", "UserId1");
 
                     b.Navigation("User");
                 });

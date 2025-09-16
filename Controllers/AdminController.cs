@@ -7,7 +7,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Hosting;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace PatientBooking.Controllers
 {
@@ -30,7 +29,7 @@ namespace PatientBooking.Controllers
                 .Include(d => d.User)
                 .ToList();
 
-            var bookings = _context.Appointments
+            var appointments = _context.Appointments
                 .Include(a => a.Doctor).ThenInclude(d => d.User)
                 .Include(a => a.Patient)
                 .OrderByDescending(a => a.Date)
@@ -41,23 +40,21 @@ namespace PatientBooking.Controllers
 
             ViewBag.AdminName = User.FindFirst(ClaimTypes.Name)?.Value;
 
-            return View(Tuple.Create(doctors, bookings, specialties));
+            return View(Tuple.Create(doctors, appointments, specialties));
         }
 
-        // ✅ Manage Doctors Page
+        #region === Doctors Management ===
+
         public IActionResult ManageDoctors()
         {
-            var doctors = _context.Doctors
-                .Include(d => d.User)
-                .ToList();
-
+            var doctors = _context.Doctors.Include(d => d.User).ToList();
             ViewBag.Specialties = Enum.GetValues(typeof(SpecialtyEnum)).Cast<SpecialtyEnum>().ToList();
-            return View(doctors); // ↔️ هيتوجه لملف ManageDoctors.cshtml
+            return View(doctors);
         }
 
-        // ✅ Save Doctor (Add / Edit)
         [HttpPost]
-        public async Task<IActionResult> SaveDoctor(int DoctorId, string DoctorName, string DoctorEmail, string DoctorPassword, SpecialtyEnum Specialty, string ShortCV)
+        public async Task<IActionResult> SaveDoctor(int DoctorId, string DoctorName, string DoctorEmail,
+            string DoctorPassword, SpecialtyEnum Specialty, string ShortCV)
         {
             if (DoctorId == 0)
             {
@@ -108,8 +105,7 @@ namespace PatientBooking.Controllers
                     }
                 }
 
-                if (string.IsNullOrEmpty(doctor.Photo))
-                    doctor.Photo = "/images/default-doctor.png";
+                doctor.Photo ??= "/images/default-doctor.png";
 
                 _context.Doctors.Add(doctor);
                 await _context.SaveChangesAsync();
@@ -117,8 +113,7 @@ namespace PatientBooking.Controllers
             else
             {
                 // ✏️ Edit Doctor
-                var existingDoctor = _context.Doctors
-                    .Include(d => d.User)
+                var existingDoctor = _context.Doctors.Include(d => d.User)
                     .FirstOrDefault(d => d.DoctorId == DoctorId);
 
                 if (existingDoctor == null) return NotFound();
@@ -141,9 +136,11 @@ namespace PatientBooking.Controllers
                         if (!Directory.Exists(uploadsFolder))
                             Directory.CreateDirectory(uploadsFolder);
 
-                        if (!string.IsNullOrEmpty(existingDoctor.Photo) && !existingDoctor.Photo.Contains("default-doctor.png"))
+                        if (!string.IsNullOrEmpty(existingDoctor.Photo) &&
+                            !existingDoctor.Photo.Contains("default-doctor.png"))
                         {
-                            var oldFilePath = Path.Combine(_hostingEnvironment.WebRootPath, existingDoctor.Photo.TrimStart('/'));
+                            var oldFilePath = Path.Combine(_hostingEnvironment.WebRootPath,
+                                existingDoctor.Photo.TrimStart('/'));
                             if (System.IO.File.Exists(oldFilePath))
                                 System.IO.File.Delete(oldFilePath);
                         }
@@ -160,8 +157,7 @@ namespace PatientBooking.Controllers
                     }
                 }
 
-                if (string.IsNullOrEmpty(existingDoctor.Photo))
-                    existingDoctor.Photo = "/images/default-doctor.png";
+                existingDoctor.Photo ??= "/images/default-doctor.png";
 
                 await _context.SaveChangesAsync();
             }
@@ -169,12 +165,10 @@ namespace PatientBooking.Controllers
             return RedirectToAction("ManageDoctors");
         }
 
-        // ✅ Delete Doctor
         [HttpPost]
         public async Task<IActionResult> DeleteDoctor(int id)
         {
-            var doctor = await _context.Doctors
-                .Include(d => d.User)
+            var doctor = await _context.Doctors.Include(d => d.User)
                 .FirstOrDefaultAsync(d => d.DoctorId == id);
 
             if (doctor != null)
@@ -193,7 +187,51 @@ namespace PatientBooking.Controllers
             return RedirectToAction("ManageDoctors");
         }
 
-        // ✅ Manage Appointments
+        #endregion
+
+        #region === Appointments Management ===
+
+        // ✅ Review Doctor Slots (Pending → Available / Rejected)
+        public IActionResult PendingSlots()
+        {
+            var slots = _context.Appointments
+                .Include(a => a.Doctor).ThenInclude(d => d.User)
+                .Where(a => a.Status == AppointmentStatus.Pending && a.PatientId == null)
+                .OrderBy(a => a.Date).ThenBy(a => a.TimeSlot)
+                .ToList();
+
+            return View(slots);
+        }
+
+        [HttpPost]
+        public IActionResult ApproveSlot(int id) => UpdateSlotStatus(id, AppointmentStatus.Available);
+
+        [HttpPost]
+        public IActionResult RejectSlot(int id) => UpdateSlotStatus(id, AppointmentStatus.Rejected);
+
+        private IActionResult UpdateSlotStatus(int id, AppointmentStatus status)
+        {
+            var slot = _context.Appointments.FirstOrDefault(a => a.AppointmentId == id && a.PatientId == null);
+            if (slot == null) return Json(new { success = false });
+
+            slot.Status = status;
+            _context.SaveChanges();
+            return Json(new { success = true });
+        }
+
+        // ✅ Manage Patient Bookings
+        public IActionResult PendingBookings()
+        {
+            var bookings = _context.Appointments
+                .Include(a => a.Doctor).ThenInclude(d => d.User)
+                .Include(a => a.Patient)
+                .Where(a => a.Status == AppointmentStatus.Pending && a.PatientId != null)
+                .OrderBy(a => a.Date).ThenBy(a => a.TimeSlot)
+                .ToList();
+
+            return View(bookings);
+        }
+
         [HttpPost]
         public IActionResult ConfirmBooking(int id) => UpdateBookingStatus(id, AppointmentStatus.Confirmed);
 
@@ -205,18 +243,18 @@ namespace PatientBooking.Controllers
 
         private IActionResult UpdateBookingStatus(int id, AppointmentStatus status)
         {
-            var appointment = _context.Appointments.FirstOrDefault(a => a.AppointmentId == id);
-            if (appointment != null)
-            {
-                appointment.Status = status;
-                _context.SaveChanges();
-                return Json(new { success = true });
-            }
+            var appointment = _context.Appointments.FirstOrDefault(a => a.AppointmentId == id && a.PatientId != null);
+            if (appointment == null) return Json(new { success = false });
 
-            return Json(new { success = false });
+            appointment.Status = status;
+            _context.SaveChanges();
+            return Json(new { success = true });
         }
 
-        // ✅ Export Appointments (CSV)
+        #endregion
+
+        #region === Export Appointments ===
+
         public IActionResult ExportAppointments()
         {
             var appointments = _context.Appointments
@@ -234,5 +272,7 @@ namespace PatientBooking.Controllers
 
             return File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", "appointments.csv");
         }
+
+        #endregion
     }
 }

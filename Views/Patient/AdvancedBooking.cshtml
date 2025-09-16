@@ -1,0 +1,454 @@
+﻿@model List<PatientBooking.Models.SpecialtyEnum>
+
+@{
+    ViewData["Title"] = "Advanced Booking";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container py-4">
+    <!-- Header -->
+    <div class="welcome-card card border-0 shadow mb-4 overflow-hidden">
+        <div class="card-body p-0">
+            <div class="row g-0">
+                <div class="col-md-8 p-4 d-flex flex-column">
+                    <h2 class="text-primary mb-3"><i class="fas fa-search me-2"></i> Advanced Booking</h2>
+                    <p class="lead mb-4">Find doctors by specialty and book available slots</p>
+                    <div class="d-flex gap-2 mt-auto">
+                        <a href="/Patient/Dashboard" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-4 d-none d-md-block">
+                    <div class="h-100 bg-primary-light"
+                         style="background: url('https://img.freepik.com/free-vector/medical-team-concept-illustration_114360-840.jpg') center/cover;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Symptoms Analysis -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-gradient-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-brain me-2"></i> AI-Powered Specialty Recommendation</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="/Patient/AdvancedBooking">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Describe Your Symptoms</label>
+                    <textarea name="symptoms" class="form-control" rows="3"
+                              placeholder="E.g., I have been experiencing chest pain, shortness of breath..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-2"></i>Get AI Recommendation
+                </button>
+            </form>
+
+            @if (ViewBag.Error != null)
+            {
+                <div class="alert alert-danger mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>@ViewBag.Error
+                </div>
+            }
+
+            @if (ViewBag.SuggestedSpecialties != null)
+            {
+                <div class="alert alert-info mt-3">
+                    <h6><i class="fas fa-lightbulb me-2"></i>AI Recommendation:</h6>
+                    <p class="mb-0">@ViewBag.SuggestedSpecialties</p>
+                    <small class="text-muted">Based on symptoms: "@ViewBag.Symptoms"</small>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Specialty Filter -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0"><i class="fas fa-filter me-2 text-primary"></i> Search Doctors by Specialty</h5>
+        </div>
+        <div class="card-body">
+            <div class="row align-items-end">
+                <div class="col-md-8">
+                    <label class="form-label fw-bold">Select Medical Specialty</label>
+                    <select id="specialtySelect" class="form-select">
+                        <option value="">-- Select Specialty --</option>
+                        @foreach (var specialty in Model)
+                        {
+                            <option value="@((int)specialty)" data-name="@specialty.ToString()">@specialty.ToString()</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button id="searchBtn" class="btn btn-secondary btn-lg w-100" disabled>
+                        <i class="fas fa-search me-2"></i>Search Doctors
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Doctors List -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-user-md me-2 text-primary"></i> Available Doctors</h5>
+            <span id="doctorCount" class="badge bg-primary rounded-pill">Click search to find doctors</span>
+        </div>
+        <div class="card-body">
+            <div id="loadingIndicator" class="text-center py-4 d-none">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Loading doctors...</p>
+            </div>
+
+            <div id="doctorsContainer" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"></div>
+
+            <div id="noDoctorsMessage" class="text-center py-5">
+                <i class="fas fa-user-md fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">Ready to Search</h4>
+                <p class="text-muted">Select a specialty and click Search to find doctors</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="slotsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalDoctorName">Available Time Slots</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label fw-bold">Select Date</label>
+                <input type="date" id="slotDate" class="form-control mb-3"
+                       min="@DateTime.Now.ToString("yyyy-MM-dd")" />
+
+                <div id="slotsLoading" class="text-center py-3 d-none">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+
+                <div id="availableSlots" class="mt-3">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i> Please select a date to view available time slots
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Styles -->
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+
+    .doctor-card {
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef !important;
+    }
+
+        .doctor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0.5rem 1rem rgba(0, 123, 255, 0.15) !important;
+            border-color: #007bff !important;
+        }
+
+    .doctor-image-container {
+        position: relative;
+        height: 200px;
+        overflow: hidden;
+    }
+
+    .doctor-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+
+    .doctor-card:hover .doctor-image {
+        transform: scale(1.05);
+    }
+
+    .doctor-specialty-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 123, 255, 0.9);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .welcome-card {
+        background: linear-gradient(135deg, #f8f9ff 0%, #e8f0ff 100%);
+    }
+
+    .view-slots-btn {
+        transition: all 0.3s ease;
+    }
+
+        .view-slots-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        }
+
+    .btn-outline-success:hover {
+        transform: scale(1.02);
+        transition: all 0.2s ease;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        console.log('Advanced Booking JavaScript loaded');
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const specialtySelect = document.getElementById('specialtySelect');
+            const searchBtn = document.getElementById('searchBtn');
+            const doctorsContainer = document.getElementById('doctorsContainer');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const noDoctorsMessage = document.getElementById('noDoctorsMessage');
+            const doctorCount = document.getElementById('doctorCount');
+
+            let selectedDoctorId = null;
+            let selectedDoctorName = '';
+
+            // Enable/Disable search button based on specialty selection
+            specialtySelect.addEventListener('change', function() {
+                const specialtyValue = this.value;
+                console.log('Specialty changed to:', specialtyValue);
+
+                if (specialtyValue && specialtyValue.trim() !== '') {
+                    console.log('Enabling search button');
+                    searchBtn.disabled = false;
+                    searchBtn.className = 'btn btn-primary btn-lg w-100';
+                } else {
+                    console.log('Disabling search button');
+                    searchBtn.disabled = true;
+                    searchBtn.className = 'btn btn-secondary btn-lg w-100';
+                }
+            });
+
+            // Search button click event
+            searchBtn.addEventListener('click', function() {
+                const specialtyValue = specialtySelect.value; // الرقم
+                const specialtyName = specialtySelect.selectedOptions[0].getAttribute('data-name'); // النص
+
+                console.log('Search clicked - Value:', specialtyValue, 'Name:', specialtyName);
+
+                if (!specialtyValue) {
+                    alert('Please select a specialty first!');
+                    return;
+                }
+
+                // Clear previous results
+                doctorsContainer.innerHTML = '';
+                noDoctorsMessage.classList.add('d-none');
+
+                // Show loading
+                loadingIndicator.classList.remove('d-none');
+                searchBtn.disabled = true;
+                searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Searching...';
+                doctorCount.textContent = 'Searching...';
+
+                console.log('Making request to: /Patient/GetDoctorsBySpecialty?specialty=' + specialtyValue);
+
+                // AJAX call using fetch API - بعت الرقم مش النص
+                fetch(`/Patient/GetDoctorsBySpecialty?specialty=${specialtyValue}`)
+                    .then(response => {
+                        console.log('Response status:', response.status);
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Server response:', data);
+
+                        // Re-enable search button
+                        loadingIndicator.classList.add('d-none');
+                        searchBtn.disabled = false;
+                        searchBtn.innerHTML = '<i class="fas fa-search me-2"></i>Search Doctors';
+
+                        // Check if response has error
+                        if (data.error) {
+                            doctorCount.textContent = 'Error occurred';
+                            doctorsContainer.innerHTML = `
+                                <div class="col-12">
+                                    <div class="alert alert-danger">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <strong>Error:</strong> ${data.error}
+                                    </div>
+                                </div>
+                            `;
+                            return;
+                        }
+
+                        const doctors = data;
+                        doctorCount.textContent = `${doctors.length} doctors found`;
+
+                        if (!doctors || doctors.length === 0) {
+                            noDoctorsMessage.querySelector('h4').textContent = 'No doctors found';
+                            noDoctorsMessage.querySelector('p').textContent = `No doctors available for ${specialtyName} specialty`;
+                            noDoctorsMessage.classList.remove('d-none');
+                            return;
+                        }
+
+                        // Build doctors cards
+                        let cardsHTML = '';
+                        doctors.forEach(function(doctor) {
+                            cardsHTML += `
+                                <div class="col">
+                                    <div class="doctor-card card h-100 border-0 shadow-sm">
+                                        <div class="doctor-image-container">
+                                            <img src="${doctor.photo || '/images/default-doctor.png'}"
+                                                 class="doctor-image" alt="Dr. ${doctor.name}"
+                                                 onerror="this.src='/images/default-doctor.png'">
+                                            <div class="doctor-specialty-badge">${doctor.shortCV || 'Specialist'}</div>
+                                        </div>
+                                        <div class="card-body">
+                                            <h5 class="card-title text-center">Dr. ${doctor.name}</h5>
+                                            <p class="card-text text-muted text-center">${specialtyName}</p>
+                                            <button class="btn btn-primary w-100 mt-3 view-slots-btn"
+                                                    data-id="${doctor.doctorId}" data-name="${doctor.name}">
+                                                <i class="fas fa-calendar-alt me-2"></i>View Available Slots
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>`;
+                        });
+                        doctorsContainer.innerHTML = cardsHTML;
+
+                        // Auto-scroll to results
+                        doctorsContainer.parentElement.parentElement.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Fetch Error:', error);
+
+                        loadingIndicator.classList.add('d-none');
+                        searchBtn.disabled = false;
+                        searchBtn.innerHTML = '<i class="fas fa-search me-2"></i>Search Doctors';
+                        doctorCount.textContent = 'Search failed';
+
+                        doctorsContainer.innerHTML = `
+                            <div class="col-12">
+                                <div class="alert alert-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>Search Failed:</strong> ${error.message}
+                                    <hr>
+                                    <small>
+                                        <strong>Debug Info:</strong><br>
+                                        URL: /Patient/GetDoctorsBySpecialty<br>
+                                        Specialty Value: ${specialtyValue}<br>
+                                        Specialty Name: ${specialtyName}<br>
+                                        Error: ${error.toString()}
+                                    </small>
+                                </div>
+                            </div>
+                        `;
+                    });
+            });
+
+            // View slots button click (delegated event)
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('view-slots-btn') || e.target.closest('.view-slots-btn')) {
+                    const btn = e.target.classList.contains('view-slots-btn') ? e.target : e.target.closest('.view-slots-btn');
+                    selectedDoctorId = btn.getAttribute('data-id');
+                    selectedDoctorName = btn.getAttribute('data-name');
+
+                    document.getElementById('modalDoctorName').textContent = `Available Slots for Dr. ${selectedDoctorName}`;
+                    document.getElementById('slotDate').value = '';
+                    document.getElementById('availableSlots').innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i> Please select a date to view available time slots
+                        </div>
+                    `;
+
+                    new bootstrap.Modal(document.getElementById('slotsModal')).show();
+                }
+            });
+
+            // Date change event to load slots
+            document.getElementById('slotDate').addEventListener('change', function() {
+                const date = this.value;
+                if (!date || !selectedDoctorId) return;
+
+                const slotsLoading = document.getElementById('slotsLoading');
+                const availableSlots = document.getElementById('availableSlots');
+
+                slotsLoading.classList.remove('d-none');
+                availableSlots.innerHTML = '';
+
+                fetch(`/Patient/GetAvailableSlots?doctorId=${selectedDoctorId}&date=${date}`)
+                    .then(response => response.json())
+                    .then(slots => {
+                        slotsLoading.classList.add('d-none');
+
+                        if (!slots.length) {
+                            availableSlots.innerHTML = `
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-circle me-2"></i>
+                                    No available time slots for this date. Please try another date.
+                                </div>
+                            `;
+                            return;
+                        }
+
+                        let html = '<div class="row g-2">';
+                        slots.forEach(function(slot) {
+                            html += `
+                                <div class="col-md-3 col-6">
+                                    <form method="post" action="/Patient/Book" class="slot-form">
+                                        <input type="hidden" name="id" value="${slot.appointmentId}" />
+                                        <button type="submit" class="btn btn-outline-success w-100 slot-btn">
+                                            <i class="fas fa-clock me-1"></i>${slot.timeSlot}
+                                        </button>
+                                    </form>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+
+                        availableSlots.innerHTML = html;
+                    })
+                    .catch(error => {
+                        slotsLoading.classList.add('d-none');
+                        console.error('Error loading slots:', error);
+
+                        availableSlots.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Error loading time slots. Please try again.
+                            </div>
+                        `;
+                    });
+            });
+
+            // Confirm booking (delegated event)
+            document.addEventListener('submit', function(e) {
+                if (e.target.classList.contains('slot-form')) {
+                    const time = e.target.querySelector('button').textContent.trim();
+                    const confirmed = confirm(`🩺 Confirm booking with Dr. ${selectedDoctorName} at ${time}?\n\nThis will send a booking request to the doctor.`);
+
+                    if (!confirmed) {
+                        e.preventDefault();
+                        return false;
+                    }
+
+                    // Show loading state
+                    e.target.querySelector('button').disabled = true;
+                    e.target.querySelector('button').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Booking...';
+                }
+            });
+        });
+    </script>
+}

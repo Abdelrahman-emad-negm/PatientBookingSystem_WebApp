@@ -38,8 +38,7 @@ namespace PatientBooking.Migrations
                     UserId = table.Column<int>(type: "int", nullable: false),
                     Specialty = table.Column<int>(type: "int", nullable: false),
                     Photo = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: true),
-                    ShortCV = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
-                    UserId1 = table.Column<int>(type: "int", nullable: true)
+                    ShortCV = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -50,11 +49,6 @@ namespace PatientBooking.Migrations
                         principalTable: "Users",
                         principalColumn: "UserId",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Doctors_Users_UserId1",
-                        column: x => x.UserId1,
-                        principalTable: "Users",
-                        principalColumn: "UserId");
                 });
 
             migrationBuilder.CreateTable(
@@ -67,7 +61,7 @@ namespace PatientBooking.Migrations
                     DoctorId = table.Column<int>(type: "int", nullable: false),
                     Date = table.Column<DateTime>(type: "datetime2", nullable: false),
                     TimeSlot = table.Column<TimeSpan>(type: "time", nullable: false),
-                    Status = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValue: "Pending"),
+                    Status = table.Column<string>(type: "nvarchar(max)", nullable: false, defaultValue: "Available"),
                     AdminNotes = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
@@ -124,13 +118,6 @@ namespace PatientBooking.Migrations
                 table: "Doctors",
                 column: "UserId",
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Doctors_UserId1",
-                table: "Doctors",
-                column: "UserId1",
-                unique: true,
-                filter: "[UserId1] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",

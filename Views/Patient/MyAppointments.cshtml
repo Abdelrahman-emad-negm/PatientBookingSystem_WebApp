@@ -16,18 +16,20 @@
 }
 
 <div class="container mt-5">
-    <h2 class="text-center mb-4"><i class="fas fa-calendar-check"></i> My Appointments</h2>
+    <h2 class="text-center mb-4"><i class="fas fa-calendar-check text-primary"></i> My Appointments</h2>
 
     <!-- Tabs -->
-    <ul class="nav nav-tabs" id="appointmentTabs" role="tablist">
+    <ul class="nav nav-tabs justify-content-center" id="appointmentTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="upcoming-tab" data-bs-toggle="tab" data-bs-target="#upcoming" type="button" role="tab">
-                <i class="fas fa-clock"></i> Upcoming
+                <i class="fas fa-clock me-1"></i> Upcoming
+                <span class="badge bg-primary ms-1">@upcoming.Count</span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="past-tab" data-bs-toggle="tab" data-bs-target="#past" type="button" role="tab">
-                <i class="fas fa-history"></i> Past
+                <i class="fas fa-history me-1"></i> Past
+                <span class="badge bg-secondary ms-1">@past.Count</span>
             </button>
         </li>
     </ul>
@@ -61,47 +63,51 @@
                                     @if (!string.IsNullOrEmpty(a.Doctor?.Photo))
                                     {
                                         <img src="@a.Doctor.Photo"
-                                             class="card-img-top object-fit-cover"
-                                             alt="@doctorName" />
+                                             class="card-img-top"
+                                             style="object-fit: cover;" alt="@doctorName" />
                                     }
                                     else
                                     {
                                         <div class="default-doctor-avatar d-flex flex-column align-items-center justify-content-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6z" />
-                                            </svg>
-                                            <span class="mt-2">@doctorName</span>
+                                            <i class="fas fa-user-md fa-3x mb-2"></i>
+                                            <span>@doctorName</span>
                                         </div>
                                     }
                                 </div>
-                                <div class="card-body d-flex flex-column">
-                                    <h5 class="card-title text-primary text-truncate" title="@doctorName">
-                                        <i class="fas fa-user-md"></i> @doctorName
+                                <div class="card-body p-3">
+                                    <h5 class="card-title text-primary text-truncate mb-2" title="@doctorName">
+                                        <i class="fas fa-user-md me-2"></i> @doctorName
                                     </h5>
-                                    <p class="mb-1">
-                                        <span class="badge bg-info text-dark text-truncate" title="@specialtyName">@specialtyName</span>
-                                    </p>
-                                    <p class="mb-1"><i class="fas fa-calendar"></i> @a.Date.ToString("dd/MM/yyyy")</p>
-                                    <p class="mb-1"><i class="fas fa-clock"></i> @a.TimeSlot.ToString("hh\\:mm")</p>
-                                    <p class="mb-3"><span class="@statusClass" title="Status: @a.Status">@a.Status</span></p>
+                                    <div class="mb-2">
+                                        <span class="badge bg-info text-dark fs-6 px-2 py-1">@specialtyName</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
+                                        <span class="fw-bold text-dark"><i class="fas fa-calendar me-2 text-primary"></i> @a.Date.ToString("dd MMM yyyy")</span>
+                                        <span class="fw-bold text-dark"><i class="fas fa-clock me-2 text-success"></i> @a.TimeSlot.ToString(@"hh\:mm")</span>
+                                    </div>
+                                    <div class="mb-3 text-center">
+                                        <span class="@statusClass fs-6 px-3 py-2">@a.Status</span>
+                                    </div>
+                                </div>
 
-                                    @if (a.Status != PatientBooking.Models.AppointmentStatus.Cancelled && a.Date > DateTime.Today)
+                                    @if (a.Status != PatientBooking.Models.AppointmentStatus.Cancelled && a.Date >= DateTime.Today)
                                     {
                                         <form asp-action="CancelAppointment" method="post"
-                                              onsubmit="return confirmCancel('@doctorName', '@a.Date.ToString("dd/MM/yyyy")', '@a.TimeSlot.ToString("hh\\:mm")')" class="mt-auto">
+                                              onsubmit="return confirmCancel('@doctorName', '@a.Date.ToString("dd MMM yyyy")', '@a.TimeSlot.ToString(@"hh\:mm")')">
                                             <input type="hidden" name="appointmentId" value="@a.AppointmentId" />
-                                            <button type="submit" class="btn btn-danger w-100">
-                                                <i class="fas fa-times"></i> Cancel
+                                            <button type="submit" class="btn btn-danger w-100 py-2">
+                                                <i class="fas fa-times me-1"></i> Cancel Appointment
                                             </button>
                                         </form>
                                     }
                                     else
                                     {
-                                        <button class="btn btn-secondary w-100" disabled>N/A</button>
+                                        <button class="btn btn-secondary w-100 py-2" disabled title="Not cancellable">
+                                            <i class="fas fa-ban me-1"></i> Cannot Cancel
+                                        </button>
                                     }
                                 </div>
                             </div>
-                        </div>
                     }
                 </div>
             }
@@ -121,28 +127,27 @@
                         var statusClass = a.Status switch
                         {
                             PatientBooking.Models.AppointmentStatus.Confirmed => "badge bg-success",
+                            PatientBooking.Models.AppointmentStatus.Completed => "badge bg-secondary",
                             PatientBooking.Models.AppointmentStatus.Cancelled => "badge bg-danger",
-                            _ => "badge bg-secondary"
+                            _ => "badge bg-light text-dark"
                         };
                         var doctorName = a.Doctor?.User?.Name ?? "Doctor";
                         var specialtyName = a.Doctor?.Specialty.ToString() ?? "N/A";
 
                         <div class="col-md-4 mb-4">
-                            <div class="card shadow-sm appointment-card h-100">
+                            <div class="card shadow-sm appointment-card h-100 bg-light">
                                 <div class="ratio ratio-16x9">
                                     @if (!string.IsNullOrEmpty(a.Doctor?.Photo))
                                     {
                                         <img src="@a.Doctor.Photo"
-                                             class="card-img-top object-fit-cover"
-                                             alt="@doctorName" />
+                                             class="card-img-top"
+                                             style="object-fit: cover;" alt="@doctorName" />
                                     }
                                     else
                                     {
                                         <div class="default-doctor-avatar d-flex flex-column align-items-center justify-content-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6z" />
-                                            </svg>
-                                            <span class="mt-2">@doctorName</span>
+                                            <i class="fas fa-user-md fa-3x mb-2"></i>
+                                            <span>@doctorName</span>
                                         </div>
                                     }
                                 </div>
@@ -150,12 +155,12 @@
                                     <h5 class="card-title text-primary text-truncate" title="@doctorName">
                                         <i class="fas fa-user-md"></i> @doctorName
                                     </h5>
-                                    <p class="mb-1">
-                                        <span class="badge bg-info text-dark text-truncate" title="@specialtyName">@specialtyName</span>
-                                    </p>
-                                    <p class="mb-1"><i class="fas fa-calendar"></i> @a.Date.ToString("dd/MM/yyyy")</p>
-                                    <p class="mb-1"><i class="fas fa-clock"></i> @a.TimeSlot.ToString("hh\\:mm")</p>
-                                    <p class="mb-0"><span class="@statusClass" title="Status: @a.Status">@a.Status</span></p>
+                                    <p class="mb-1"><span class="badge bg-info text-dark">@specialtyName</span></p>
+                                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                                        <span class="fw-bold text-dark"><i class="fas fa-calendar me-2 text-primary"></i> @a.Date.ToString("dd MMM yyyy")</span>
+                                        <span class="fw-bold text-dark"><i class="fas fa-clock me-2 text-success"></i> @a.TimeSlot.ToString(@"hh\:mm")</span>
+                                    </div>
+                                    <p class="mb-0"><span class="@statusClass">@a.Status</span></p>
                                 </div>
                             </div>
                         </div>
@@ -172,17 +177,10 @@
     }
 </script>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
 <style>
-    .appointment-card img.object-fit-cover {
-        object-fit: cover;
-    }
-
     .appointment-card {
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         border-radius: 12px;
-        overflow: hidden;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     }
 
         .appointment-card:hover {
@@ -190,31 +188,10 @@
             box-shadow: 0 8px 20px rgba(0,0,0,0.15);
         }
 
-    .text-truncate {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        display: inline-block;
-        max-width: 100%;
-    }
-
     .default-doctor-avatar {
-        width: 100%;
-        height: 100%;
         background-color: #f0f8ff;
         color: #4682b4;
         text-align: center;
         padding: 1rem;
     }
-
-        .default-doctor-avatar svg {
-            width: 60%;
-            height: 60%;
-            fill: currentColor;
-        }
-
-        .default-doctor-avatar span {
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
 </style>

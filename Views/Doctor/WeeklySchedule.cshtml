@@ -8,55 +8,66 @@
 }
 
 <div class="container mt-5">
-    <h2 class="text-center mb-4">
-        <i class="fas fa-calendar-week text-primary"></i> Weekly Schedule
-    </h2>
-    <p class="text-center text-muted">
-        From <strong>@startOfWeek.ToString("dd MMM yyyy")</strong>
-        to <strong>@endOfWeek.AddDays(-1).ToString("dd MMM yyyy")</strong>
-    </p>
-
-    @if (!Model.Any())
-    {
-        <div class="alert alert-secondary text-center">
-            <i class="fas fa-info-circle"></i> No appointments scheduled this week.
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-calendar-week me-2"></i> Weekly Schedule
+            </h4>
         </div>
-    }
-    else
-    {
-        <div class="table-responsive">
-            <table class="table table-bordered align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Patient</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var a in Model)
-                    {
-                        var statusClass = a.Status switch
-                        {
-                            PatientBooking.Models.AppointmentStatus.Confirmed => "badge bg-success",
-                            PatientBooking.Models.AppointmentStatus.Pending => "badge bg-warning text-dark",
-                            PatientBooking.Models.AppointmentStatus.Cancelled => "badge bg-danger",
-                            PatientBooking.Models.AppointmentStatus.Available => "badge bg-primary",
-                            _ => "badge bg-light text-dark"
-                        };
+        <div class="card-body">
+            <p class="text-center text-muted mb-4">
+                From <strong>@startOfWeek:dd MMM yyyy</strong>
+                to <strong>@endOfWeek.AddDays(-1):dd MMM yyyy</strong>
+            </p>
 
-                        <tr>
-                            <td>@a.Date.ToString("dddd, dd MMM")</td>
-                            <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
-                            <td>@(a.Patient?.Name ?? "Available")</td>
-                            <td><span class="@statusClass">@a.Status</span></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            @if (!Model.Any())
+            {
+                <div class="alert alert-secondary text-center">
+                    <i class="fas fa-info-circle me-1"></i> No appointments scheduled this week.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Patient</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in Model)
+                            {
+                                var (statusClass, statusIcon) = a.Status switch
+                                {
+                                    PatientBooking.Models.AppointmentStatus.Confirmed => ("badge bg-primary", "fas fa-check-circle"),
+                                    PatientBooking.Models.AppointmentStatus.Pending => ("badge bg-warning text-dark", "fas fa-hourglass-half"),
+                                    PatientBooking.Models.AppointmentStatus.Cancelled => ("badge bg-danger", "fas fa-times-circle"),
+                                    PatientBooking.Models.AppointmentStatus.Available => ("badge bg-success", "fas fa-calendar-check"),
+                                    PatientBooking.Models.AppointmentStatus.Completed => ("badge bg-secondary", "fas fa-clipboard-check"),
+                                    _ => ("badge bg-light text-dark", "fas fa-info-circle")
+                                };
+
+                                <tr>
+                                    <td>@a.Date.ToString("dddd, dd MMM yyyy")</td>
+                                    <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
+                                    <td>@(a.Patient?.Name ?? "Available")</td>
+                                    <td>
+                                        <span class="@statusClass">
+                                            <i class="@statusIcon me-1"></i> @a.Status
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
-    }
+    </div>
 </div>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

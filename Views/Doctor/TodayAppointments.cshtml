@@ -7,65 +7,92 @@
 }
 
 <div class="container mt-5">
-    <h2 class="text-center mb-4">
-        <i class="fas fa-calendar-day text-primary"></i> Today's Appointments - @doctorName
-    </h2>
-
-    @if (!Model.Any())
-    {
-        <div class="alert alert-info text-center">
-            <i class="fas fa-info-circle"></i> No appointments for today.
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-calendar-day me-2"></i> Today's Appointments - @doctorName
+            </h4>
         </div>
-    }
-    else
-    {
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Patient</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Status</th>
-                        <th class="text-center">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var a in Model)
-                    {
-                        var statusClass = a.Status switch
-                        {
-                            PatientBooking.Models.AppointmentStatus.Confirmed => "badge bg-success",
-                            PatientBooking.Models.AppointmentStatus.Pending => "badge bg-warning text-dark",
-                            PatientBooking.Models.AppointmentStatus.Cancelled => "badge bg-danger",
-                            PatientBooking.Models.AppointmentStatus.Available => "badge bg-primary",
-                            _ => "badge bg-light text-dark"
-                        };
+        <div class="card-body">
+            @if (!Model.Any())
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle me-1"></i> No appointments for today.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Patient</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th class="text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in Model)
+                            {
+                                var (statusClass, statusIcon) = a.Status switch
+                                {
+                                    PatientBooking.Models.AppointmentStatus.Confirmed => ("badge bg-primary", "fas fa-check-circle"),
+                                    PatientBooking.Models.AppointmentStatus.Pending => ("badge bg-warning text-dark", "fas fa-hourglass-half"),
+                                    PatientBooking.Models.AppointmentStatus.Cancelled => ("badge bg-danger", "fas fa-times-circle"),
+                                    PatientBooking.Models.AppointmentStatus.Available => ("badge bg-success", "fas fa-calendar-check"),
+                                    PatientBooking.Models.AppointmentStatus.Completed => ("badge bg-secondary", "fas fa-clipboard-check"),
+                                    _ => ("badge bg-light text-dark", "fas fa-info-circle")
+                                };
 
-
-                        <tr>
-                            <td>@a.Patient?.Name ?? "N/A"</td>
-                            <td>@a.Date.ToString("dd/MM/yyyy")</td>
-                            <td>@a.TimeSlot.ToString(@"hh\\:mm")</td>
-                            <td><span class="@statusClass">@a.Status.ToString()</span></td>
-                            <td class="text-center">
-                                <form asp-action="UpdateAppointmentStatus" method="post" class="d-inline">
-                                    <input type="hidden" name="appointmentId" value="@a.AppointmentId" />
-                                    <select name="status" class="form-select form-select-sm d-inline w-auto" onchange="this.form.submit()">
-                                        <option value="">-- Change Status --</option>
-                                        <option value="Confirmed">Confirm</option>
-                                        <option value="Completed">Complete</option>
-                                        <option value="Cancelled">Cancel</option>
-                                        <option value="NoShow">No Show</option>
-                                    </select>
-                                </form>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+                                <tr>
+                                    <td>@a.Patient?.Name ?? "N/A"</td>
+                                    <td>@a.Date:dd/MM/yyyy</td>
+                                    <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
+                                    <td>
+                                        <span class="@statusClass">
+                                            <i class="@statusIcon me-1"></i> @a.Status
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (a.Status == PatientBooking.Models.AppointmentStatus.Confirmed)
+                                        {
+                                            <button class="btn btn-sm btn-outline-success"
+                                                    onclick="markCompleted(@a.AppointmentId)">
+                                                <i class="fas fa-check"></i> Completed
+                                            </button>
+                                        }
+                                        else if (a.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                        {
+                                            <span class="text-muted">Awaiting approval</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
-    }
+    </div>
 </div>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+@section Scripts {
+    <script>
+        function markCompleted(id) {
+            fetch('/Doctor/MarkAsCompleted/' + id, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.message);
+                    if (data.success) location.reload();
+                });
+        }
+    </script>
+}
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

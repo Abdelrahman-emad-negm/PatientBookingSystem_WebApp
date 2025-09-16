@@ -20,26 +20,31 @@ namespace PatientBooking.Models
         [Key]
         public int WorkingHourId { get; set; }
 
+        // 👨‍⚕️ ربط بالدكتور
         [Required]
         public int DoctorId { get; set; }
 
         [ForeignKey(nameof(DoctorId))]
         public Doctor Doctor { get; set; } = null!;
 
+        // 📅 يوم من الأسبوع
         [Required(ErrorMessage = "Day of the week is required")]
         [Display(Name = "Day of Week")]
         public DayOfWeekEnum DayOfWeek { get; set; }
 
+        // ⏰ بداية العمل
         [Required(ErrorMessage = "Start time is required")]
         [DataType(DataType.Time)]
         [Display(Name = "Start Time")]
         public TimeSpan StartTime { get; set; }
 
+        // ⏰ نهاية العمل
         [Required(ErrorMessage = "End time is required")]
         [DataType(DataType.Time)]
         [Display(Name = "End Time")]
         public TimeSpan EndTime { get; set; }
 
+        // ✅ التحقق من صلاحية الوقت
         [NotMapped]
         public bool IsValid => EndTime > StartTime;
     }

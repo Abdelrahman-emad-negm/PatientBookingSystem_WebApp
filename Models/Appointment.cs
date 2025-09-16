@@ -10,7 +10,8 @@ namespace PatientBooking.Models
         Pending,     // تم الحجز وينتظر موافقة الأدمن
         Confirmed,   // الأدمن وافق
         Cancelled,   // تم الإلغاء
-        Rejected     // الأدمن رفض الحجز
+        Rejected,     // الأدمن رفض الحجز
+        Completed    // تم حضور الموعد
     }
 
     public class Appointment

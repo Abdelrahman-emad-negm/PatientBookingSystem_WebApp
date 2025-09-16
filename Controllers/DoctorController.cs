@@ -19,21 +19,16 @@ namespace PatientBooking.Controllers
             _logger = logger;
         }
 
-        /// <summary>
-        /// استرجاع رقم الدكتور الحالي من الـ Claims أو الـ Session
-        /// </summary>
         private int? GetDoctorIdFromUser()
         {
             try
             {
-                // من الـ Claims
                 if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out int userId) &&
                     User.FindFirstValue(ClaimTypes.Role) == "Doctor")
                 {
                     return _context.Doctors.FirstOrDefault(d => d.UserId == userId)?.DoctorId;
                 }
 
-                // من الـ Session (fallback)
                 var sessionUserId = HttpContext.Session.GetInt32("UserId");
                 var sessionRole = HttpContext.Session.GetString("UserRole");
                 if (sessionUserId.HasValue && sessionRole == "Doctor")
@@ -65,25 +60,29 @@ namespace PatientBooking.Controllers
                 return RedirectToAction("Login", "Account");
             }
 
-            var appointments = _context.Appointments
-                                       .Include(a => a.Patient)
-                                       .Where(a => a.DoctorId == doctorId.Value)
-                                       .OrderByDescending(a => a.Date)
-                                       .ThenBy(a => a.TimeSlot)
-                                       .ToList();
+            var allAppointments = _context.Appointments
+                                          .Include(a => a.Patient)
+                                          .Where(a => a.DoctorId == doctorId.Value)
+                                          .OrderByDescending(a => a.Date)
+                                          .ThenBy(a => a.TimeSlot)
+                                          .ToList();
 
+            // ✅ فلترة حسب الحالات
+            var grouped = allAppointments
+                .GroupBy(a => a.Status)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // ✅ إضافة بيانات الدكتور للـ View
             ViewBag.Doctor = doctor;
             ViewBag.DoctorName = doctor.User?.Name ?? "Doctor";
             ViewBag.Specialty = doctor.Specialty.ToString();
+            ViewBag.Photo = doctor.Photo ?? "/images/default-doctor.png";
             ViewBag.Error = TempData["Error"];
             ViewBag.Success = TempData["Success"];
 
-            return View(Tuple.Create(new Appointment(), appointments));
+            return View(grouped);
         }
 
-        /// <summary>
-        /// يبني slots كل 30 دقيقة بين startTime و endTime في التاريخ المحدد
-        /// </summary>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult AddAppointmentsRange(DateTime date, TimeSpan startTime, TimeSpan endTime)
@@ -107,6 +106,13 @@ namespace PatientBooking.Controllers
                 return RedirectToAction("DoctorDashboard");
             }
 
+            // ✅ الشرط الجديد: لو التاريخ هو النهاردة، مينفعش تبدأ قبل الوقت الحالي
+            if (date.Date == DateTime.Today && startTime < DateTime.Now.TimeOfDay)
+            {
+                TempData["Error"] = "You cannot add slots before the current time.";
+                return RedirectToAction("DoctorDashboard");
+            }
+
             var slotLength = TimeSpan.FromMinutes(30);
             var newSlots = new List<Appointment>();
             int skipped = 0;
@@ -125,7 +131,7 @@ namespace PatientBooking.Controllers
                         DoctorId = doctorId.Value,
                         Date = date.Date,
                         TimeSlot = time,
-                        Status = AppointmentStatus.Available,
+                        Status = AppointmentStatus.Pending, // ✅ يبدأ Pending لحد ما الأدمن يوافق
                         PatientId = null
                     });
                 }
@@ -140,13 +146,16 @@ namespace PatientBooking.Controllers
                 _context.Appointments.AddRange(newSlots);
                 _context.SaveChanges();
 
-                var msg = $"{newSlots.Count} appointment slot(s) added successfully.";
-                if (skipped > 0) msg += $" ({skipped} existing slot(s) skipped)";
+                _logger.LogInformation("{Count} new slots added by Doctor {DoctorId}, {Skipped} skipped.",
+                    newSlots.Count, doctorId, skipped);
+
+                var msg = $"{newSlots.Count} slot(s) added successfully.";
+                if (skipped > 0) msg += $" ({skipped} skipped)";
                 TempData["Success"] = msg;
             }
             else
             {
-                TempData["Error"] = "No new slots added (all selected slots already exist).";
+                TempData["Error"] = "No new slots added (all already exist).";
             }
 
             return RedirectToAction("DoctorDashboard");
@@ -162,7 +171,9 @@ namespace PatientBooking.Controllers
                                             .Include(a => a.Patient)
                                             .Where(a => a.DoctorId == doctorId.Value &&
                                                         a.Date == today &&
-                                                        (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed))
+                                                        (a.Status == AppointmentStatus.Pending ||
+                                                         a.Status == AppointmentStatus.Confirmed ||
+                                                         a.Status == AppointmentStatus.Available))
                                             .OrderBy(a => a.TimeSlot)
                                             .ToList();
 
@@ -194,24 +205,28 @@ namespace PatientBooking.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult UpdateAppointmentStatus(int appointmentId, string status)
+        public IActionResult MarkAsCompleted(int appointmentId)
         {
             var doctorId = GetDoctorIdFromUser();
             if (doctorId == null) return Json(new { success = false, message = "Doctor not found" });
 
-            if (!Enum.TryParse<AppointmentStatus>(status, true, out var parsedStatus))
-                return Json(new { success = false, message = "Invalid status" });
-
-            var appointment = _context.Appointments.FirstOrDefault(a =>
-                a.AppointmentId == appointmentId && a.DoctorId == doctorId.Value);
+            var appointment = _context.Appointments
+                                      .FirstOrDefault(a => a.AppointmentId == appointmentId && a.DoctorId == doctorId.Value);
 
             if (appointment == null)
                 return Json(new { success = false, message = "Appointment not found" });
 
-            appointment.Status = parsedStatus;
-            _context.SaveChanges();
+            if (appointment.Status == AppointmentStatus.Confirmed)
+            {
+                appointment.Status = AppointmentStatus.Completed;
+                _context.SaveChanges();
 
-            return Json(new { success = true, message = "Appointment status updated successfully" });
+                _logger.LogInformation("Appointment {Id} marked completed by Doctor {DoctorId}", appointmentId, doctorId);
+
+                return Json(new { success = true, message = "Appointment marked as completed." });
+            }
+
+            return Json(new { success = false, message = "Only confirmed appointments can be completed." });
         }
 
         public IActionResult DeleteAppointment(int id)
@@ -222,13 +237,16 @@ namespace PatientBooking.Controllers
             var appointment = _context.Appointments.FirstOrDefault(a =>
                 a.AppointmentId == id &&
                 a.DoctorId == doctorId.Value &&
-                a.Status == AppointmentStatus.Available);
+                (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Available));
 
             if (appointment != null)
             {
                 _context.Appointments.Remove(appointment);
                 _context.SaveChanges();
-                TempData["Success"] = "Appointment deleted.";
+
+                _logger.LogInformation("Doctor {DoctorId} deleted slot {AppointmentId}", doctorId, id);
+
+                TempData["Success"] = "Appointment slot deleted.";
             }
             else
             {
