@@ -1,5 +1,6 @@
-﻿@model Tuple<
-List<PatientBooking.Models.Doctor>,
+﻿@using PatientBooking.Models
+@model Tuple<
+    List<PatientBooking.Models.Doctor>,
     List<PatientBooking.Models.Appointment>,
     List < PatientBooking.Models.SpecialtyEnum >
 >
@@ -7,320 +8,114 @@ List<PatientBooking.Models.Doctor>,
 @{
     ViewData["Title"] = "Admin Dashboard";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var doctorsCount = Model.Item1.Count;
+    var appointmentsCount = Model.Item2.Count;
+    var confirmedAppointments = Model.Item2.Count(a => a.Status == AppointmentStatus.Confirmed);
+
+    // ✅ نحسب عدد المرضى المميزين من الـ Appointments
+    var patientsCount = Model.Item2
+        .Where(a => a.PatientId != null)  // لو عندك PatientId في Appointment
+        .Select(a => a.PatientId)
+        .Distinct()
+        .Count();
 }
 
-<div class="container-fluid mt-4">
-    <h2 class="text-center mb-4 fw-bold">
-        ⚙️ Admin Dashboard
-    </h2>
+<div class="container mt-5">
+    <div class="text-center mb-5">
+        <h1 class="fw-bold">⚙️ Welcome, Admin!</h1>
+        <p class="text-muted fs-5">Manage your system easily from here</p>
+    </div>
 
-    <div class="card shadow-lg border-0">
-        <div class="card-body">
-            <!-- Navigation Tabs -->
-            <ul class="nav nav-tabs nav-fill" id="adminTabs" role="tablist">
-                <li class="nav-item">
-                    <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-doctors">
-                        👨‍⚕️ Manage Doctors
-                    </button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-bookings">
-                        📅 Manage Appointments
-                    </button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-slots">
-                        🕒 Pending Slots
-                    </button>
-                </li>
-            </ul>
-
-            <div class="tab-content mt-4">
-                <!-- Doctors Tab -->
-                <div class="tab-pane fade show active" id="tab-doctors">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold">Doctors List</h5>
-                        <button class="btn btn-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#doctorModal">
-                            ➕ Add Doctor
-                        </button>
-                    </div>
-                    @if (Model.Item1?.Count > 0)
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-striped align-middle">
-                                <thead class="table-primary">
-                                    <tr>
-                                        <th>Photo</th>
-                                        <th>Name</th>
-                                        <th>Email</th>
-                                        <th>Specialty</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var doc in Model.Item1)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <img src="@(string.IsNullOrEmpty(doc.Photo) ? "/images/default-doctor.png" : doc.Photo)"
-                                                     class="doctor-thumbnail" alt="@doc.User?.Name" />
-                                            </td>
-                                            <td class="fw-semibold">@doc.User?.Name</td>
-                                            <td>@doc.User?.Email</td>
-                                            <td><span class="badge bg-info">@doc.Specialty.ToString()</span></td>
-                                            <td>
-                                                <button class="btn btn-warning btn-sm"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#doctorModal"
-                                                        data-id="@doc.DoctorId"
-                                                        data-name="@doc.User?.Name"
-                                                        data-email="@doc.User?.Email"
-                                                        data-specialty="@doc.Specialty"
-                                                        data-photo="@doc.Photo"
-                                                        data-cv="@doc.ShortCV">
-                                                    ✏️ Edit
-                                                </button>
-                                                <form asp-action="DeleteDoctor" asp-route-id="@doc.DoctorId" method="post" class="d-inline"
-                                                      onsubmit="return confirm('Delete this doctor?');">
-                                                    <button type="submit" class="btn btn-danger btn-sm">🗑️ Delete</button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="alert alert-info text-center shadow-sm">No doctors available.</div>
-                    }
+    <!-- Quick Stats with Better Colors -->
+    <div class="row g-4 mb-5 text-center">
+        <!-- Doctors Card - Blue/Primary -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="card-body text-white">
+                    <i class="fas fa-user-md fa-2x mb-3" style="opacity: 0.9;"></i>
+                    <h3 class="fw-bold mb-2">@doctorsCount</h3>
+                    <p class="mb-0" style="opacity: 0.9;">Doctors</p>
                 </div>
+            </div>
+        </div>
 
-                <!-- Appointments Tab -->
-                <div class="tab-pane fade" id="tab-bookings">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold">Appointments Management</h5>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="exportAppointments()">
-                            ⬇️ Export CSV
-                        </button>
-                    </div>
-                    @if (Model.Item2?.Count > 0)
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-primary">
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Time</th>
-                                        <th>Doctor</th>
-                                        <th>Patient</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var appt in Model.Item2.Where(a => a.PatientId != null))
-                                    {
-                                        <tr>
-                                            <td>@appt.Date.ToString("yyyy-MM-dd")</td>
-                                            <td>@appt.TimeSlot.ToString(@"hh\:mm")</td>
-                                            <td>@appt.Doctor?.User?.Name ?? "—"</td>
-                                            <td>@appt.Patient?.Name ?? "—"</td>
-                                            <td>
-                                                <span class="badge @(appt.Status == PatientBooking.Models.AppointmentStatus.Pending ? "bg-warning text-dark" :
-                                                                                                                                                           appt.Status == PatientBooking.Models.AppointmentStatus.Confirmed ? "bg-success" :
-                                                                                                                                                           appt.Status == PatientBooking.Models.AppointmentStatus.Cancelled ? "bg-danger" : "bg-secondary")">
-                                            @appt.Status
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
-                                            @if (appt.Status == PatientBooking.Models.AppointmentStatus.Pending)
-                                                    {
-                                                        <button class="btn btn-success" onclick="updateBooking(@appt.AppointmentId, 'ConfirmBooking')">✔️ Confirm</button>
-                                                        <button class="btn btn-danger" onclick="updateBooking(@appt.AppointmentId, 'RejectBooking')">❌ Reject</button>
-                                                    }
-                                                    @if (appt.Status == PatientBooking.Models.AppointmentStatus.Confirmed || appt.Status == PatientBooking.Models.AppointmentStatus.Pending)
-                                                    {
-                                                        <button class="btn btn-secondary" onclick="updateBooking(@appt.AppointmentId, 'CancelBooking')">🚫 Cancel</button>
-                                                    }
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="alert alert-info text-center shadow-sm">No appointments found.</div>
-                    }
+        <!-- Patients Card - Green -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                <div class="card-body text-white">
+                    <i class="fas fa-users fa-2x mb-3" style="opacity: 0.9;"></i>
+                    <h3 class="fw-bold mb-2">@patientsCount</h3>
+                    <p class="mb-0" style="opacity: 0.9;">Patients</p>
                 </div>
+            </div>
+        </div>
 
-                <!-- Pending Slots Tab -->
-                <div class="tab-pane fade" id="tab-slots">
-                    <h5 class="fw-bold mb-3">Doctor Slots Awaiting Approval</h5>
+        <!-- Confirmed Appointments Card - Orange -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);">
+                <div class="card-body text-white">
+                    <i class="fas fa-calendar-check fa-2x mb-3" style="opacity: 0.9;"></i>
+                    <h3 class="fw-bold mb-2">@confirmedAppointments</h3>
+                    <p class="mb-0" style="opacity: 0.9;">Confirmed</p>
+                </div>
+            </div>
+        </div>
 
-                    @if (Model.Item2.Any(a => a.Status == PatientBooking.Models.AppointmentStatus.Pending && a.PatientId == null))
-                    {
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover align-middle">
-                                <thead class="table-primary">
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Time</th>
-                                        <th>Doctor</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var slot in Model.Item2.Where(a => a.Status == PatientBooking.Models.AppointmentStatus.Pending && a.PatientId == null))
-                                    {
-                                        <tr>
-                                            <td>@slot.Date.ToString("yyyy-MM-dd")</td>
-                                            <td>@slot.TimeSlot.ToString(@"hh\:mm")</td>
-                                            <td>@slot.Doctor?.User?.Name</td>
-                                            <td><span class="badge bg-warning text-dark">Pending</span></td>
-                                            <td>
-                                                <div class="btn-group btn-group-sm">
-                                                    <button class="btn btn-success" onclick="updateSlot(@slot.AppointmentId, 'ApproveSlot')">✔️ Approve</button>
-                                                    <button class="btn btn-danger" onclick="updateSlot(@slot.AppointmentId, 'RejectSlot')">❌ Reject</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="alert alert-info text-center shadow-sm">No pending slots found.</div>
-                    }
+        <!-- Total Appointments Card - Purple -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 h-100" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
+                <div class="card-body text-dark">
+                    <i class="fas fa-calendar-alt fa-2x mb-3 text-primary" style="opacity: 0.8;"></i>
+                    <h3 class="fw-bold mb-2">@appointmentsCount</h3>
+                    <p class="mb-0 text-muted">Total Appointments</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Cards -->
+    <div class="row g-4">
+        <!-- Doctors Management -->
+        <div class="col-md-4">
+            <div class="card shadow-lg border-0 h-100 text-center">
+                <div class="card-body">
+                    <i class="fas fa-user-md fa-3x text-primary mb-3"></i>
+                    <h5 class="card-title fw-bold">Manage Doctors</h5>
+                    <p class="text-muted">Add, edit or remove doctors from the system</p>
+                    <a href="/Admin/ManageDoctors" class="btn btn-primary w-100">
+                        Go <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Appointments Management -->
+        <div class="col-md-4">
+            <div class="card shadow-lg border-0 h-100 text-center">
+                <div class="card-body">
+                    <i class="fas fa-calendar-check fa-3x text-success mb-3"></i>
+                    <h5 class="card-title fw-bold">Manage Appointments</h5>
+                    <p class="text-muted">Confirm, reject, or cancel patient bookings</p>
+                    <a href="/Admin/ManageAppointments" class="btn btn-success w-100">
+                        Go <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slots Management -->
+        <div class="col-md-4">
+            <div class="card shadow-lg border-0 h-100 text-center">
+                <div class="card-body">
+                    <i class="fas fa-clock fa-3x text-warning mb-3"></i>
+                    <h5 class="card-title fw-bold">Manage Slots</h5>
+                    <p class="text-muted">Approve or reject doctor time slots</p>
+                    <a href="/Admin/PendingSlots" class="btn btn-warning w-100">
+                        Go <i class="fas fa-arrow-right"></i>
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-<!-- Doctor Modal (Add/Edit) -->
-<div class="modal fade" id="doctorModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <form asp-action="SaveDoctor" method="post" enctype="multipart/form-data">
-                <input type="hidden" name="DoctorId" id="doctorId" />
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">Doctor</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Name</label>
-                            <input name="DoctorName" id="doctorName" class="form-control" required />
-
-                            <label class="form-label mt-2">Email</label>
-                            <input name="DoctorEmail" id="doctorEmail" type="email" class="form-control" required />
-
-                            <label class="form-label mt-2">Password</label>
-                            <input name="DoctorPassword" type="password" class="form-control" />
-                            <small class="text-muted">Leave blank if not changing</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Specialty</label>
-                            <select name="Specialty" id="doctorSpecialty" class="form-select" required>
-                                @foreach (var s in Model.Item3)
-                                {
-                                    <option value="@s">@s</option>
-                                }
-                            </select>
-
-                            <label class="form-label mt-2">Photo</label>
-                            <input name="PhotoFile" type="file" class="form-control" accept="image/*" />
-
-                            <label class="form-label mt-2">Short CV</label>
-                            <textarea name="ShortCV" id="doctorCV" class="form-control"></textarea>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-primary">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-@section Scripts {
-    <script>
-        // Fill doctor modal (Add/Edit)
-        var doctorModal = document.getElementById('doctorModal');
-        doctorModal.addEventListener('show.bs.modal', function (event) {
-            var btn = event.relatedTarget;
-            if (btn.getAttribute('data-id')) {
-                // Edit
-                document.getElementById('doctorId').value = btn.getAttribute('data-id');
-                document.getElementById('doctorName').value = btn.getAttribute('data-name');
-                document.getElementById('doctorEmail').value = btn.getAttribute('data-email');
-                document.getElementById('doctorSpecialty').value = btn.getAttribute('data-specialty');
-                document.getElementById('doctorCV').value = btn.getAttribute('data-cv') || '';
-            } else {
-                // Add
-                document.getElementById('doctorId').value = 0;
-                document.getElementById('doctorName').value = '';
-                document.getElementById('doctorEmail').value = '';
-                document.getElementById('doctorSpecialty').selectedIndex = 0;
-                document.getElementById('doctorCV').value = '';
-            }
-        });
-
-        // Update booking status
-        function updateBooking(id, action) {
-            fetch(`/Admin/${action}/${id}`, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) location.reload();
-                    else alert("Failed to update booking");
-                });
-        }
-
-        // Update slot status
-        function updateSlot(id, action) {
-            fetch(`/Admin/${action}/${id}`, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) location.reload();
-                    else alert("Failed to update slot");
-                });
-        }
-
-        // Export Appointments
-        function exportAppointments() {
-            window.location.href = "/Admin/ExportAppointments";
-        }
-    </script>
-}
-
-@section Styles {
-    <style>
-        .doctor-thumbnail {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
-
-        .nav-tabs .nav-link {
-            font-size: 1rem;
-        }
-
-            .nav-tabs .nav-link.active {
-                background-color: #0d6efd;
-                color: #fff;
-            }
-    </style>
-}

@@ -25,9 +25,7 @@ namespace PatientBooking.Controllers
         // ✅ Dashboard
         public IActionResult AdminDashboard()
         {
-            var doctors = _context.Doctors
-                .Include(d => d.User)
-                .ToList();
+            var doctors = _context.Doctors.Include(d => d.User).ToList();
 
             var appointments = _context.Appointments
                 .Include(a => a.Doctor).ThenInclude(d => d.User)
@@ -58,7 +56,6 @@ namespace PatientBooking.Controllers
         {
             if (DoctorId == 0)
             {
-                // ➕ Add Doctor
                 if (_context.Users.Any(u => u.Email == DoctorEmail))
                 {
                     TempData["Error"] = "Email already exists!";
@@ -83,7 +80,6 @@ namespace PatientBooking.Controllers
                     ShortCV = ShortCV
                 };
 
-                // Upload photo
                 if (Request.Form.Files.Count > 0)
                 {
                     var file = Request.Form.Files[0];
@@ -112,7 +108,6 @@ namespace PatientBooking.Controllers
             }
             else
             {
-                // ✏️ Edit Doctor
                 var existingDoctor = _context.Doctors.Include(d => d.User)
                     .FirstOrDefault(d => d.DoctorId == DoctorId);
 
@@ -126,7 +121,6 @@ namespace PatientBooking.Controllers
                 if (!string.IsNullOrEmpty(DoctorPassword))
                     existingDoctor.User.Password = BCrypt.Net.BCrypt.HashPassword(DoctorPassword);
 
-                // Update Photo
                 if (Request.Form.Files.Count > 0)
                 {
                     var file = Request.Form.Files[0];
@@ -191,7 +185,6 @@ namespace PatientBooking.Controllers
 
         #region === Appointments Management ===
 
-        // ✅ Review Doctor Slots (Pending → Available / Rejected)
         public IActionResult PendingSlots()
         {
             var slots = _context.Appointments
@@ -204,51 +197,61 @@ namespace PatientBooking.Controllers
         }
 
         [HttpPost]
-        public IActionResult ApproveSlot(int id) => UpdateSlotStatus(id, AppointmentStatus.Available);
+        public IActionResult ApproveSlot(int appointmentId) => UpdateSlotStatus(appointmentId, AppointmentStatus.Available);
 
         [HttpPost]
-        public IActionResult RejectSlot(int id) => UpdateSlotStatus(id, AppointmentStatus.Rejected);
+        public IActionResult RejectSlot(int appointmentId) => UpdateSlotStatus(appointmentId, AppointmentStatus.Rejected);
 
-        private IActionResult UpdateSlotStatus(int id, AppointmentStatus status)
+        private IActionResult UpdateSlotStatus(int appointmentId, AppointmentStatus status)
         {
-            var slot = _context.Appointments.FirstOrDefault(a => a.AppointmentId == id && a.PatientId == null);
-            if (slot == null) return Json(new { success = false });
+            var slot = _context.Appointments.FirstOrDefault(a => a.AppointmentId == appointmentId && a.PatientId == null);
+            if (slot == null) return Json(new { success = false, message = "Slot not found." });
 
             slot.Status = status;
             _context.SaveChanges();
-            return Json(new { success = true });
+            return Json(new { success = true, message = $"Slot marked as {status}." });
         }
 
-        // ✅ Manage Patient Bookings
-        public IActionResult PendingBookings()
+
+        public IActionResult ManageAppointments()
         {
             var bookings = _context.Appointments
                 .Include(a => a.Doctor).ThenInclude(d => d.User)
                 .Include(a => a.Patient)
-                .Where(a => a.Status == AppointmentStatus.Pending && a.PatientId != null)
-                .OrderBy(a => a.Date).ThenBy(a => a.TimeSlot)
+                .Where(a => a.PatientId != null)   // ✅ هات كل الحجوزات اللي ليها مريض
+                .OrderByDescending(a => a.Date)
+                .ThenByDescending(a => a.TimeSlot)
                 .ToList();
 
             return View(bookings);
         }
 
-        [HttpPost]
-        public IActionResult ConfirmBooking(int id) => UpdateBookingStatus(id, AppointmentStatus.Confirmed);
 
-        [HttpPost]
-        public IActionResult RejectBooking(int id) => UpdateBookingStatus(id, AppointmentStatus.Rejected);
+        [HttpPost] public IActionResult ConfirmBooking(int appointmentId) => UpdateBookingStatus(appointmentId, AppointmentStatus.Confirmed);
+        [HttpPost] public IActionResult RejectBooking(int appointmentId) => UpdateBookingStatus(appointmentId, AppointmentStatus.Rejected);
+        [HttpPost] public IActionResult CancelBooking(int appointmentId) => UpdateBookingStatus(appointmentId, AppointmentStatus.Cancelled);
+        [HttpPost] public IActionResult CompleteBooking(int appointmentId) => UpdateBookingStatus(appointmentId, AppointmentStatus.Completed);
 
-        [HttpPost]
-        public IActionResult CancelBooking(int id) => UpdateBookingStatus(id, AppointmentStatus.Cancelled);
-
-        private IActionResult UpdateBookingStatus(int id, AppointmentStatus status)
+        private IActionResult UpdateBookingStatus(int appointmentId, AppointmentStatus status)
         {
-            var appointment = _context.Appointments.FirstOrDefault(a => a.AppointmentId == id && a.PatientId != null);
-            if (appointment == null) return Json(new { success = false });
+            var appointment = _context.Appointments
+                .Include(a => a.Doctor).ThenInclude(d => d.User)
+                .Include(a => a.Patient)
+                .FirstOrDefault(a => a.AppointmentId == appointmentId && a.PatientId != null);
+
+            if (appointment == null) return Json(new { success = false, message = "Appointment not found." });
 
             appointment.Status = status;
             _context.SaveChanges();
-            return Json(new { success = true });
+
+            var dateFormatted = appointment.Date.ToString("dd MMM yyyy");
+            var timeFormatted = DateTime.Today.Add(appointment.TimeSlot).ToString("hh:mm tt");
+
+            return Json(new
+            {
+                success = true,
+                message = $"Appointment on {dateFormatted} at {timeFormatted} marked as {status}."
+            });
         }
 
         #endregion
@@ -267,7 +270,9 @@ namespace PatientBooking.Controllers
 
             foreach (var a in appointments)
             {
-                sb.AppendLine($"{a.Date:yyyy-MM-dd},{a.TimeSlot},{a.Doctor?.User?.Name},{a.Patient?.Name},{a.Status}");
+                var dateFormatted = a.Date.ToString("dd MMM yyyy");
+                var timeFormatted = DateTime.Today.Add(a.TimeSlot).ToString("hh:mm tt");
+                sb.AppendLine($"{dateFormatted},{timeFormatted},{a.Doctor?.User?.Name ?? "—"},{a.Patient?.Name ?? "—"},{a.Status}");
             }
 
             return File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", "appointments.csv");

@@ -5,34 +5,49 @@
 }
 
 <div class="container mt-4">
-    <h2>Manage Doctors</h2>
+    <h2 class="mb-4">👨‍⚕️ Manage Doctors</h2>
 
-    <!-- ✅ Add / Edit Form -->
+    <!-- ✅ Alerts -->
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> @TempData["Error"]</div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success"><i class="fas fa-check-circle"></i> @TempData["Success"]</div>
+    }
+
+    <!-- ✅ Add / Edit Doctor Form -->
     <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-user-md"></i> Add / Edit Doctor
+        </div>
         <div class="card-body">
             <form asp-action="SaveDoctor" asp-controller="Admin" method="post" enctype="multipart/form-data">
-                <input type="hidden" id="DoctorId" name="DoctorId" />
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="DoctorId" name="DoctorId" value="" />
 
-                <div class="row">
+                <div class="row g-3">
                     <div class="col-md-4">
-                        <label>Name</label>
-                        <input type="text" id="DoctorName" name="DoctorName" class="form-control" required />
+                        <label class="form-label">Name</label>
+                        <input type="text" id="DoctorName" name="DoctorName" class="form-control" value="" required />
                     </div>
                     <div class="col-md-4">
-                        <label>Email</label>
-                        <input type="email" id="DoctorEmail" name="DoctorEmail" class="form-control" required />
+                        <label class="form-label">Email</label>
+                        <input type="email" id="DoctorEmail" name="DoctorEmail" class="form-control" value="" required autocomplete="off" />
                     </div>
                     <div class="col-md-4">
-                        <label>Password</label>
-                        <input type="password" id="DoctorPassword" name="DoctorPassword" class="form-control" />
+                        <label class="form-label">Password</label>
+                        <input type="password" id="DoctorPassword" name="DoctorPassword" class="form-control" value="" autocomplete="new-password" />
                         <small class="text-muted">Leave empty if not changing</small>
                     </div>
                 </div>
 
-                <div class="row mt-3">
+                <div class="row g-3 mt-1">
                     <div class="col-md-4">
-                        <label>Specialty</label>
-                        <select id="Specialty" name="Specialty" class="form-control" required>
+                        <label class="form-label">Specialty</label>
+                        <select id="Specialty" name="Specialty" class="form-select" required>
+                            <option value="">-- Select --</option>
                             @foreach (var s in specialties)
                             {
                                 <option value="@s">@s</option>
@@ -40,12 +55,15 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label>Short CV</label>
-                        <input type="text" id="ShortCV" name="ShortCV" class="form-control" />
+                        <label class="form-label">Short CV</label>
+                        <input type="text" id="ShortCV" name="ShortCV" class="form-control" value="" />
                     </div>
                     <div class="col-md-4">
-                        <label>Photo</label>
+                        <label class="form-label">Photo</label>
                         <input type="file" id="Photo" name="Photo" class="form-control" />
+                        <img id="PreviewPhoto" src="/images/default-doctor.png"
+                             class="mt-2 img-thumbnail d-none"
+                             style="width:80px;height:80px;" />
                     </div>
                 </div>
 
@@ -53,7 +71,7 @@
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-save"></i> Save Doctor
                     </button>
-                    <button type="reset" class="btn btn-secondary">
+                    <button type="button" class="btn btn-secondary" id="ClearForm">
                         <i class="fas fa-undo"></i> Clear
                     </button>
                 </div>
@@ -61,53 +79,63 @@
         </div>
     </div>
 
-    <!-- ✅ Doctors Table -->
+    <!-- ✅ Doctors List -->
     <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <i class="fas fa-list"></i> Doctors List
+        </div>
         <div class="card-body">
             @if (Model.Any())
             {
-                <table class="table table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Photo</th>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Specialty</th>
-                            <th>Short CV</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var doctor in Model)
-                        {
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle" id="doctorsTable">
+                        <thead class="table-dark">
                             <tr>
-                                <td>
-                                    <img src="@(string.IsNullOrEmpty(doctor.Photo)
-                                                                                         ? "/images/default-doctor.png"
-                                                                                         : doctor.Photo)"
-                                 class="img-thumbnail" style="width:60px;height:60px;" />
-                        </td>
-                        <td>@doctor.User?.Name</td>
-                        <td>@doctor.User?.Email</td>
-                        <td>@doctor.Specialty</td>
-                        <td>@doctor.ShortCV</td>
-                        <td>
-                            <button class="btn btn-warning btn-sm"
-                                    onclick="editDoctor(@doctor.DoctorId, '@doctor.User?.Name', '@doctor.User?.Email', '@doctor.Specialty', '@doctor.ShortCV')">
-                                <i class="fas fa-edit"></i> Edit
-                            </button>
-                            <form asp-action="DeleteDoctor" asp-controller="Admin"
-                                  asp-route-id="@doctor.DoctorId" method="post" class="d-inline"
-                                  onsubmit="return confirm('Are you sure you want to delete this doctor?');">
-                                <button type="submit" class="btn btn-danger btn-sm">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                                        }
-                    </tbody>
-                </table>
+                                <th>Photo</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Specialty</th>
+                                <th>Short CV</th>
+                                <th class="text-center" style="width:180px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var doctor in Model)
+                            {
+                                <tr data-doctor-id="@doctor.DoctorId">
+                                    <td>
+                                        <img src="@(string.IsNullOrEmpty(doctor.Photo) ? "/images/default-doctor.png" : doctor.Photo)"
+                                             class="rounded-circle" style="width:60px;height:60px;" />
+                                    </td>
+                                    <td>@doctor.User?.Name</td>
+                                    <td>@doctor.User?.Email</td>
+                                    <td>@doctor.Specialty</td>
+                                    <td>@doctor.ShortCV</td>
+                                    <td class="text-center">
+                                        <button class="btn btn-warning btn-sm edit-doctor"
+                                                data-id="@doctor.DoctorId"
+                                                data-name="@doctor.User?.Name"
+                                                data-email="@doctor.User?.Email"
+                                                data-specialty="@doctor.Specialty"
+                                                data-cv="@doctor.ShortCV"
+                                                data-photo="@doctor.Photo">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                        <button class="btn btn-danger btn-sm delete-doctor"
+                                                data-id="@doctor.DoctorId">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <nav>
+                    <ul class="pagination justify-content-center mt-3" id="pagination"></ul>
+                </nav>
             }
             else
             {
@@ -117,16 +145,125 @@
     </div>
 </div>
 
+<form id="__AjaxAntiForgeryForm">@Html.AntiForgeryToken()</form>
+
 @section Scripts {
     <script>
-        // ✅ Fill form when editing doctor
-        function editDoctor(id, name, email, specialty, cv) {
-            document.getElementById("DoctorId").value = id;
-            document.getElementById("DoctorName").value = name;
-            document.getElementById("DoctorEmail").value = email;
-            document.getElementById("Specialty").value = specialty;
-            document.getElementById("ShortCV").value = cv;
-            document.getElementById("DoctorPassword").value = "";
-        }
+        document.addEventListener("DOMContentLoaded", function () {
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            // ✅ Fill form when editing
+            document.querySelectorAll(".edit-doctor").forEach(button => {
+                button.addEventListener("click", function () {
+                    document.getElementById("DoctorId").value = this.dataset.id;
+                    document.getElementById("DoctorName").value = this.dataset.name;
+                    document.getElementById("DoctorEmail").value = this.dataset.email;
+                    document.getElementById("Specialty").value = this.dataset.specialty;
+                    document.getElementById("ShortCV").value = this.dataset.cv;
+                    document.getElementById("DoctorPassword").value = "";
+
+                    const photo = this.dataset.photo || "/images/default-doctor.png";
+                    const preview = document.getElementById("PreviewPhoto");
+                    preview.src = photo;
+                    preview.classList.remove("d-none");
+                });
+            });
+
+            // ✅ Clear form - Fixed to properly reset all fields
+            document.getElementById("ClearForm").addEventListener("click", function () {
+                // Clear all form fields
+                document.getElementById("DoctorId").value = "";
+                document.getElementById("DoctorName").value = "";
+                document.getElementById("DoctorEmail").value = "";
+                document.getElementById("DoctorPassword").value = "";
+                document.getElementById("Specialty").value = "";
+                document.getElementById("ShortCV").value = "";
+                document.getElementById("Photo").value = "";
+
+                // Hide preview photo
+                document.getElementById("PreviewPhoto").classList.add("d-none");
+                document.getElementById("PreviewPhoto").src = "/images/default-doctor.png";
+            });
+
+            // ✅ Delete doctor with fetch - Fixed to remove row from table
+            document.querySelectorAll(".delete-doctor").forEach(button => {
+                button.addEventListener("click", function () {
+                    const id = this.dataset.id;
+                    const row = this.closest('tr'); // Get the table row
+
+                    if (confirm("Are you sure you want to delete this doctor?")) {
+                        fetch(`/Admin/DeleteDoctor`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                            body: `id=${id}&__RequestVerificationToken=${token}`
+                        })
+                        .then(res => {
+                            if (res.redirected) {
+                                // If redirected, it means success (Controller redirects on success)
+                                alert("Doctor deleted successfully!");
+                                row.remove(); // Remove the row from table
+                                setupPagination(); // Re-setup pagination after row removal
+                                return;
+                            }
+                            return res.json();
+                        })
+                        .then(data => {
+                            if (data && data.message) {
+                                alert(data.message);
+                                if (data.success) {
+                                    row.remove();
+                                    setupPagination();
+                                }
+                            }
+                        })
+                        .catch((error) => {
+                            console.error('Error:', error);
+                            alert("Something went wrong, please try again.");
+                        });
+                    }
+                });
+            });
+
+            // ✅ Pagination (10 per page)
+            function setupPagination() {
+                const rows = document.querySelectorAll("#doctorsTable tbody tr");
+                const rowsPerPage = 10;
+                const pageCount = Math.ceil(rows.length / rowsPerPage);
+                const pagination = document.getElementById("pagination");
+                let currentPage = 1;
+
+                function showPage(page) {
+                    currentPage = page;
+                    rows.forEach((row, i) => {
+                        row.style.display = (i >= (page - 1) * rowsPerPage && i < page * rowsPerPage) ? "" : "none";
+                    });
+                    renderPagination();
+                }
+
+                function renderPagination() {
+                    pagination.innerHTML = "";
+                    if (pageCount <= 1) return;
+                    for (let i = 1; i <= pageCount; i++) {
+                        pagination.innerHTML += `
+                            <li class="page-item ${i === currentPage ? "active" : ""}">
+                                <a class="page-link" href="#">${i}</a>
+                            </li>`;
+                    }
+                    pagination.querySelectorAll("a").forEach((a, i) => {
+                        a.addEventListener("click", e => {
+                            e.preventDefault();
+                            showPage(i + 1);
+                        });
+                    });
+                }
+
+                showPage(1);
+            }
+
+            // Make setupPagination globally accessible for delete function
+            window.setupPagination = setupPagination;
+
+            setupPagination();
+        });
     </script>
 }

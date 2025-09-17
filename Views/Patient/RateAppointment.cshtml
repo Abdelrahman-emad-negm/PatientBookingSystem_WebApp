@@ -1,0 +1,247 @@
+﻿@{
+    ViewData["Title"] = "Rate Appointment";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">⭐ Rate Your Appointment</h4>
+                </div>
+                <div class="card-body">
+                    <div class="appointment-info mb-4 p-3 bg-light rounded">
+                        <h5>Appointment Details:</h5>
+                        <p><strong>Doctor:</strong> Dr. @ViewBag.DoctorName</p>
+                        <p><strong>Date:</strong> @ViewBag.AppointmentDate</p>
+                        <p><strong>Time:</strong> @ViewBag.AppointmentTime</p>
+                    </div>
+
+                    <form asp-action="SubmitRating" method="post">
+                        <input type="hidden" name="appointmentId" value="@ViewBag.AppointmentId" />
+
+                        <div class="form-group mb-4">
+                            <label class="form-label fw-bold">Rate your experience (1-5 stars):</label>
+                            <div class="star-rating">
+                                <input type="radio" id="star5" name="rating" value="5" required />
+                                <label for="star5" title="5 stars - Excellent">⭐</label>
+
+                                <input type="radio" id="star4" name="rating" value="4" />
+                                <label for="star4" title="4 stars - Very Good">⭐</label>
+
+                                <input type="radio" id="star3" name="rating" value="3" />
+                                <label for="star3" title="3 stars - Good">⭐</label>
+
+                                <input type="radio" id="star2" name="rating" value="2" />
+                                <label for="star2" title="2 stars - Fair">⭐</label>
+
+                                <input type="radio" id="star1" name="rating" value="1" />
+                                <label for="star1" title="1 star - Poor">⭐</label>
+                            </div>
+
+                            <!-- Rating Feedback -->
+                            <div id="rating-feedback" class="rating-feedback">
+                                Please select a rating
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label for="reviewComment" class="form-label fw-bold">Comments (optional):</label>
+                            <textarea name="reviewComment" id="reviewComment"
+                                      class="form-control" rows="4"
+                                      placeholder="Share your experience with this doctor..."></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a asp-action="MyAppointments" class="btn btn-secondary me-md-2">
+                                ← Back to Appointments
+                            </a>
+                            <button type="submit" id="submit-btn" class="btn submit-btn" disabled>
+                                Submit Rating
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .star-rating {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: center;
+        padding: 20px 0;
+        gap: 5px;
+    }
+
+        .star-rating input {
+            display: none;
+        }
+
+        .star-rating label {
+            font-size: 2.5rem;
+            color: #ddd;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+            .star-rating label:hover {
+                transform: scale(1.1);
+                color: #ffed4e;
+            }
+
+                .star-rating label:hover ~ label {
+                    color: #ffed4e;
+                }
+
+        .star-rating input:checked ~ label {
+            color: #ffd700 !important;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+            transform: scale(1.05);
+        }
+
+            .star-rating input:checked ~ label:after {
+                content: '';
+                position: absolute;
+                top: -8px;
+                left: -8px;
+                right: -8px;
+                bottom: -8px;
+                border-radius: 50%;
+                background: radial-gradient(circle, rgba(255, 215, 0, 0.3) 0%, transparent 70%);
+                z-index: -1;
+            }
+
+    .rating-feedback {
+        text-align: center;
+        margin-top: 15px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        min-height: 30px;
+        transition: all 0.3s ease;
+    }
+
+    .rating-1 {
+        color: #dc3545;
+    }
+
+    .rating-2 {
+        color: #fd7e14;
+    }
+
+    .rating-3 {
+        color: #ffc107;
+    }
+
+    .rating-4 {
+        color: #20c997;
+    }
+
+    .rating-5 {
+        color: #28a745;
+    }
+
+    .appointment-info {
+        border-left: 4px solid #007bff;
+    }
+
+    .card {
+        border: none;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    .btn {
+        border-radius: 25px;
+        padding: 10px 25px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+    .submit-btn {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        border: none;
+        color: white;
+    }
+
+        .submit-btn:hover {
+            background: linear-gradient(45deg, #218838, #1ba085);
+        }
+
+        .submit-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const stars = document.querySelectorAll('.star-rating input');
+        const labels = document.querySelectorAll('.star-rating label');
+        const feedback = document.getElementById('rating-feedback');
+        const submitBtn = document.getElementById('submit-btn');
+
+        const feedbackMessages = {
+            5: "Excellent! 🌟 Outstanding experience",
+            4: "Very Good! 👍 Great service",
+            3: "Good 👌 Satisfactory visit",
+            2: "Fair 😐 Could be better",
+            1: "Poor 😞 Needs improvement"
+        };
+
+        // Handle star selection
+        stars.forEach((star, index) => {
+            star.addEventListener('change', function() {
+                if (this.checked) {
+                    const rating = this.value;
+
+                    // Update feedback message
+                    feedback.textContent = feedbackMessages[rating];
+                    feedback.className = `rating-feedback rating-${rating}`;
+
+                    // Enable submit button
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = `Submit ${rating} Star${rating > 1 ? 's' : ''} Rating`;
+
+                    // Add animation to selected star
+                    const selectedLabel = document.querySelector(`label[for="${this.id}"]`);
+                    selectedLabel.style.transform = 'scale(1.2)';
+                    setTimeout(() => {
+                        selectedLabel.style.transform = 'scale(1)';
+                    }, 300);
+                }
+            });
+        });
+
+        // Hover effects
+        labels.forEach((label, index) => {
+            label.addEventListener('mouseenter', function() {
+                const starValue = parseInt(this.getAttribute('for').replace('star', ''));
+                feedback.textContent = feedbackMessages[starValue];
+                feedback.className = `rating-feedback rating-${starValue}`;
+            });
+        });
+
+        // Reset feedback when not hovering
+        document.querySelector('.star-rating').addEventListener('mouseleave', function() {
+            const checkedStar = document.querySelector('.star-rating input:checked');
+            if (checkedStar) {
+                const rating = checkedStar.value;
+                feedback.textContent = feedbackMessages[rating];
+                feedback.className = `rating-feedback rating-${rating}`;
+            } else {
+                feedback.textContent = 'Please select a rating';
+                feedback.className = 'rating-feedback';
+            }
+        });
+    });
+</script>

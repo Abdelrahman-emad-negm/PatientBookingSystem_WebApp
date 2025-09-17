@@ -11,6 +11,9 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <div class="container py-4">
+    <!-- Output an antiforgery token (hidden) so JavaScript can read it reliably -->
+    @Html.AntiForgeryToken()
+
     <!-- Doctor Header -->
     <div class="doctor-header card border-0 shadow mb-4">
         <div class="card-body p-4 d-flex justify-content-between align-items-center">
@@ -30,7 +33,7 @@
             </div>
             <div>
                 <span class="text-muted">
-                    <i class="far fa-calendar-alt me-1"></i> @DateTime.Now.ToString("dd MMM yyyy")
+                    <i class="far fa-calendar-alt me-1"></i> @DateTime.Now.ToString("dddd, dd MMM yyyy")
                 </span>
             </div>
         </div>
@@ -58,26 +61,27 @@
             <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i> Add Available Slots</h5>
         </div>
         <div class="card-body">
-            <form asp-action="AddAppointmentsRange" method="post">
+            <form asp-action="AddAppointmentsRange" method="post" id="addSlotsForm">
+                @* Anti-forgery token inside form as well (safe to render twice) *@
                 @Html.AntiForgeryToken()
+
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Date</label>
-                        <input type="date" name="date" class="form-control"
+                        <input id="slotDate" type="date" name="date" class="form-control"
                                value="@today.ToString("yyyy-MM-dd")"
                                min="@today.ToString("yyyy-MM-dd")" required />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Start Time</label>
-                        <input type="time" name="startTime" class="form-control"
+                        @* Remove static 'min' here; we'll control it via JS so it only applies for today's date *@
+                        <input id="startTimeInput" type="time" name="startTime" class="form-control"
                                value="@now.ToString("HH:mm")"
-                               min="@now.ToString("HH:mm")"
                                required />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">End Time</label>
-                        <input type="time" name="endTime" class="form-control"
-                               min="@now.ToString("HH:mm")"
+                        <input id="endTimeInput" type="time" name="endTime" class="form-control"
                                required />
                     </div>
                 </div>
@@ -146,8 +150,10 @@
                                             };
 
                                             <tr class="@rowClass">
-                                                <td>@a.Date.ToString("dd MMM yyyy")</td>
-                                                <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
+                                                <!-- Show full day name + date -->
+                                                <td>@a.Date.ToString("dddd, dd MMM yyyy")</td>
+                                                <!-- Show time in 12-hour format with AM/PM -->
+                                                <td>@a.TimeSlot.ToString(@"hh\:mm") @((a.TimeSlot.Hours >= 12) ? "PM" : "AM")</td>
                                                 <td>@(a.Patient?.Name ?? "—")</td>
                                                 <td><span class="badge @badgeClass">@a.Status</span></td>
                                                 <td>
@@ -193,20 +199,112 @@
 
 @section Scripts {
     <script>
-        function confirmDelete(id) {
-            if (confirm('Delete this slot?')) {
-                window.location.href = '/Doctor/DeleteAppointment/' + id;
-            }
+        // ----------------------------
+        // Client-side time/date helpers
+        // ----------------------------
+
+        // Pad helper
+        function pad(n) { return n < 10 ? '0' + n : n; }
+
+        // Get local current time in "HH:mm"
+        function getLocalNowTime() {
+            var d = new Date();
+            return pad(d.getHours()) + ':' + pad(d.getMinutes());
         }
 
-        function markCompleted(id) {
-            fetch('/Doctor/MarkAsCompleted/' + id, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
+        // Get local today date string "yyyy-mm-dd"
+        function getLocalTodayDate() {
+            var d = new Date();
+            // produce local-date in yyyy-mm-dd
+            var tzOffset = d.getTimezoneOffset() * 60000;
+            var localISO = new Date(d - tzOffset).toISOString().split('T')[0];
+            return localISO;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var dateInput = document.getElementById('slotDate');
+            var startInput = document.getElementById('startTimeInput');
+            var endInput = document.getElementById('endTimeInput');
+
+            if (!dateInput || !startInput || !endInput) return;
+
+            // Update min attributes based on selected date
+            function updateTimeConstraints() {
+                var todayStr = getLocalTodayDate();
+
+                if (dateInput.value === todayStr) {
+                    // If the selected date is today, enforce min = now
+                    var nowTime = getLocalNowTime();
+                    startInput.min = nowTime;
+
+                    // If start is earlier than now, bump it forward
+                    if (startInput.value < nowTime) {
+                        startInput.value = nowTime;
+                    }
+                } else {
+                    // For future dates, remove the min restriction
+                    startInput.removeAttribute('min');
+                }
+
+                // Ensure end time is always after start time
+                endInput.min = startInput.value || '00:00';
+                if (!endInput.value || endInput.value <= startInput.value) {
+                    // default end = start + 30 minutes
+                    var parts = (startInput.value || '09:00').split(':');
+                    var h = parseInt(parts[0], 10), m = parseInt(parts[1], 10) + 30;
+                    h += Math.floor(m / 60);
+                    m = m % 60;
+                    if (h >= 24) { h = 23; m = 59; }
+                    endInput.value = pad(h) + ':' + pad(m);
+                }
+            }
+
+            // run on load
+            updateTimeConstraints();
+
+            // update when date or start changes
+            dateInput.addEventListener('change', updateTimeConstraints);
+            startInput.addEventListener('change', updateTimeConstraints);
+
+            // ----------------------------
+            // Mark as completed (AJAX)
+            // ----------------------------
+            // Sends appointmentId + antiforgery token in urlencoded body
+            window.markCompleted = function (id) {
+                var tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                if (!tokenInput) {
+                    alert('Request verification token not found. Please reload the page.');
+                    return;
+                }
+                var token = tokenInput.value;
+
+                var body = 'appointmentId=' + encodeURIComponent(id) + '&__RequestVerificationToken=' + encodeURIComponent(token);
+
+                fetch('@Url.Action("MarkAsCompleted", "Doctor")', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: body
+                })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
                     alert(data.message);
                     if (data.success) location.reload();
+                })
+                .catch(function (err) {
+                    console.error(err);
+                    alert('An error occurred while marking the appointment as completed.');
                 });
-        }
+            };
+
+            // Delete appointment slot (simple GET redirect)
+            window.confirmDelete = function (id) {
+                if (confirm('Delete this slot?')) {
+                    window.location.href = '/Doctor/DeleteAppointment/' + id;
+                }
+            };
+        });
     </script>
 }
 

@@ -6,7 +6,14 @@
     var doctorName = ViewBag.DoctorName as string ?? "Doctor";
 }
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
 <div class="container mt-5">
+    @* Render an anti-forgery token once so JS can read it *@
+    <form id="__AjaxAntiForgeryForm" style="display:none">
+        @Html.AntiForgeryToken()
+    </form>
+
     <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
             <h4 class="mb-0">
@@ -30,12 +37,20 @@
                                 <th>Date</th>
                                 <th>Time</th>
                                 <th>Status</th>
+                                <th class="text-center">State</th> @* Upcoming / Past *@
                                 <th class="text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var a in Model)
                             {
+                                var appointmentDateTime = a.Date.Add(a.TimeSlot); // Date + TimeSlot
+                                var isUpcoming = appointmentDateTime > DateTime.Now;
+                                var isPast = appointmentDateTime <= DateTime.Now;
+                                var displayDate = appointmentDateTime.ToString("dddd, dd/MM/yyyy"); // e.g. Tuesday, 16/09/2025
+                                var displayTime = appointmentDateTime.ToString("hh:mm tt"); // e.g. 03:00 PM
+                                var patientName = string.IsNullOrWhiteSpace(a.Patient?.Name) ? "—" : a.Patient.Name;
+
                                 var (statusClass, statusIcon) = a.Status switch
                                 {
                                     PatientBooking.Models.AppointmentStatus.Confirmed => ("badge bg-primary", "fas fa-check-circle"),
@@ -45,17 +60,29 @@
                                     PatientBooking.Models.AppointmentStatus.Completed => ("badge bg-secondary", "fas fa-clipboard-check"),
                                     _ => ("badge bg-light text-dark", "fas fa-info-circle")
                                 };
-
                                 <tr>
-                                    <td>@a.Patient?.Name ?? "N/A"</td>
-                                    <td>@a.Date:dd/MM/yyyy</td>
-                                    <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
+                                    <td>@patientName</td>
+                                    <td>@displayDate</td>
+                                    <td>
+                                        @displayTime
+                                    </td>
                                     <td>
                                         <span class="@statusClass">
                                             <i class="@statusIcon me-1"></i> @a.Status
                                         </span>
                                     </td>
                                     <td class="text-center">
+                                        @if (isUpcoming)
+                                        {
+                                            <span class="badge bg-info text-dark">Upcoming</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Past</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @* Show Completed button only when appointment is Confirmed (same workflow you wanted) *@
                                         @if (a.Status == PatientBooking.Models.AppointmentStatus.Confirmed)
                                         {
                                             <button class="btn btn-sm btn-outline-success"
@@ -84,15 +111,38 @@
 
 @section Scripts {
     <script>
+        // Read antiforgery token from the hidden form
+        function getAntiForgeryToken() {
+            var tokenInput = document.querySelector('#__AjaxAntiForgeryForm input[name="__RequestVerificationToken"]');
+            return tokenInput ? tokenInput.value : null;
+        }
+
+        // Mark appointment as completed (POST urlencoded with antiforgery token)
         function markCompleted(id) {
-            fetch('/Doctor/MarkAsCompleted/' + id, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    alert(data.message);
-                    if (data.success) location.reload();
-                });
+            var token = getAntiForgeryToken();
+            if (!token) {
+                alert('Request verification token not found. Please reload the page.');
+                return;
+            }
+
+            var body = 'appointmentId=' + encodeURIComponent(id) + '&__RequestVerificationToken=' + encodeURIComponent(token);
+
+            fetch('@Url.Action("MarkAsCompleted", "Doctor")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: body
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                alert(data.message);
+                if (data.success) location.reload();
+            })
+            .catch(function (err) {
+                console.error(err);
+                alert('An error occurred while marking the appointment as completed.');
+            });
         }
     </script>
 }
-
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

@@ -1,8 +1,38 @@
 ﻿@model List<PatientBooking.Models.Appointment>
+@using PatientBooking.Models
+
 @{
     ViewData["Title"] = "Patient Dashboard";
     Layout = "~/Views/Shared/_Layout.cshtml";
     var patientName = ViewBag.PatientName as string ?? "Patient";
+
+    Func<AppointmentStatus, string> getBadgeClass = status =>
+    {
+        return status switch
+        {
+            AppointmentStatus.Available => "success",
+            AppointmentStatus.Pending => "warning",
+            AppointmentStatus.Confirmed => "primary",
+            AppointmentStatus.Cancelled => "danger",
+            AppointmentStatus.Rejected => "dark",
+            AppointmentStatus.Completed => "secondary",
+            _ => "info"
+        };
+    };
+
+    Func<AppointmentStatus, string> getBadgeIcon = status =>
+    {
+        return status switch
+        {
+            AppointmentStatus.Available => "check-circle",
+            AppointmentStatus.Pending => "clock",
+            AppointmentStatus.Confirmed => "calendar-check",
+            AppointmentStatus.Cancelled => "times-circle",
+            AppointmentStatus.Rejected => "ban",
+            AppointmentStatus.Completed => "check-double",
+            _ => "info-circle"
+        };
+    };
 }
 
 <div class="container py-4">
@@ -11,7 +41,9 @@
         <div class="card-body p-0">
             <div class="row g-0">
                 <div class="col-md-8 p-4 d-flex flex-column">
-                    <h2 class="text-primary mb-3">Welcome back, @patientName!</h2>
+                    <h2 class="text-primary mb-3">
+                        <i class="fas fa-user-circle me-2"></i>Welcome back, @patientName!
+                    </h2>
                     <p class="lead mb-4">Find and book appointments with our specialists</p>
                     <div class="d-flex gap-2 mt-auto">
                         <a href="/Patient/MyAppointments" class="btn btn-primary">
@@ -30,65 +62,183 @@
             </div>
         </div>
     </div>
+
+    <!-- Quick Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-gradient-primary text-white border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="fas fa-calendar-plus fa-2x mb-2"></i>
+                    <h4 class="mb-0">@Model.Count(x => x.Date.Add(x.TimeSlot) >= DateTime.Now)</h4>
+                    <small>Available Slots</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-gradient-success text-white border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="fas fa-user-md fa-2x mb-2"></i>
+                    <h4 class="mb-0">@Model.Where(x => x.Doctor != null).Select(x => x.Doctor.DoctorId).Distinct().Count()</h4>
+                    <small>Doctors Available</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-gradient-info text-white border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="fas fa-stethoscope fa-2x mb-2"></i>
+                    <h4 class="mb-0">@Model.Where(x => x.Doctor != null).Select(x => x.Doctor.Specialty).Distinct().Count()</h4>
+                    <small>Specialties</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-gradient-warning text-white border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="fas fa-clock fa-2x mb-2"></i>
+                    <h4 class="mb-0">@Model.Count(x => x.Date.Date == DateTime.Today)</h4>
+                    <small>Today's Slots</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Available Appointments -->
     <div class="card shadow-sm mb-4" id="available-appointments">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <div class="card-header bg-gradient-primary text-white">
             <h5 class="mb-0">
-                <i class="fas fa-calendar-alt me-2 text-primary"></i> Available Appointments
+                <i class="fas fa-calendar-alt me-2"></i> Available Appointments
+                <span class="badge bg-light text-primary ms-2">
+                    @Model.Count(x => x.Date.Add(x.TimeSlot) >= DateTime.Now) available
+                </span>
             </h5>
-            <span class="badge bg-primary rounded-pill">@Model.Count() available</span>
         </div>
-        <div class="card-body">
-            @if (!Model.Any())
+        <div class="card-body p-0">
+            @if (!Model.Any(x => x.Date.Add(x.TimeSlot) >= DateTime.Now))
             {
                 <div class="empty-state text-center py-5">
                     <i class="fas fa-calendar-times fa-4x text-muted mb-4"></i>
-                    <h4 class="text-muted mb-3">No appointments found</h4>
+                    <h4 class="text-muted mb-3">No upcoming appointments</h4>
                     <p class="text-muted mb-4">Try adjusting your filters or check back later</p>
-                    <a href="/Patient/Dashboard" class="btn btn-primary">
-                        <i class="fas fa-sync-alt me-2"></i>Reset Search
+                    <a href="/Patient/AdvancedBooking" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>Find Doctors
                     </a>
                 </div>
             }
             else
             {
-                <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                    @foreach (var item in Model)
+                <div class="list-group list-group-flush">
+                    @foreach (var item in Model.Where(x => x.Date.Add(x.TimeSlot) >= DateTime.Now).OrderBy(x => x.Date).ThenBy(x => x.TimeSlot))
                     {
                         var doctorName = item.Doctor?.User?.Name ?? "Doctor";
-                        var specialtyName = item.Doctor != null ? item.Doctor.Specialty.ToString() : "General";
+                        var doctorPhoto = item.Doctor?.Photo ?? "/images/default-doctor.png";
+                        var doctorCV = item.Doctor?.ShortCV ?? "Experienced medical professional committed to providing high-quality patient care.";
+                        var doctorSpecialty = item.Doctor != null ? item.Doctor.Specialty.ToString() : "N/A";
+                        var statusBadge = getBadgeClass(item.Status);
+                        var statusIcon = getBadgeIcon(item.Status);
+                        var appointmentDateTime = item.Date.Add(item.TimeSlot);
+                        var timeUntil = appointmentDateTime - DateTime.Now;
+                        var appointmentId = item.AppointmentId;
 
-                        <div class="col">
-                            <div class="doctor-card card h-100 border-0 shadow-sm">
-                                <div class="doctor-image-container">
-                                    @if (!string.IsNullOrEmpty(item.Doctor?.Photo))
-                                    {
-                                        <img src="@item.Doctor.Photo" class="doctor-image" alt="@doctorName">
-                                    }
-                                    else
-                                    {
-                                        <div class="default-doctor-avatar">
-                                            <i class="fas fa-user-md fa-3x mb-2"></i>
-                                            <span>Dr. @doctorName</span>
-                                        </div>
-                                    }
-                                    <div class="doctor-specialty-badge">@specialtyName</div>
+                        // Calculate doctor's real rating
+                        var doctorRatedAppointments = Model.Where(x => x.DoctorId == item.DoctorId && x.Rating.HasValue).ToList();
+                        var averageRating = doctorRatedAppointments.Any()
+                        ? Math.Round(doctorRatedAppointments.Average(x => x.Rating.Value), 1)
+                        : (double?)null;
+                        var totalRatings = doctorRatedAppointments.Count;
+                        var ratingDisplay = averageRating.HasValue
+                        ? $"{averageRating}★ ({totalRatings} review{(totalRatings != 1 ? "s" : "")})"
+                        : "No ratings yet";
+
+                        <div class="list-group-item border-0 appointment-card">
+                            <div class="d-flex gap-3 align-items-start">
+                                <div class="flex-shrink-0">
+                                    <img src="@doctorPhoto" alt="@doctorName"
+                                         class="appointment-avatar"
+                                         onerror="this.src='/images/default-doctor.png'" />
+                                    <div class="text-center mt-1">
+                                        <span class="badge bg-@statusBadge badge-sm">
+                                            <i class="fas fa-@statusIcon me-1"></i>@item.Status
+                                        </span>
+                                    </div>
                                 </div>
-                                <div class="card-body d-flex flex-column">
-                                    <h5 class="card-title mb-3">Dr. @doctorName</h5>
 
-                                    <div class="appointment-time mb-3 p-3 bg-light rounded">
-                                        <div class="d-flex justify-content-between">
-                                            <span class="fw-bold"><i class="fas fa-calendar-day me-1"></i> @item.Date.ToString("dd MMM yyyy")</span>
-                                            <span class="fw-bold"><i class="fas fa-clock me-1"></i> @item.TimeSlot.ToString(@"hh\:mm")</span>
+                                <div class="appointment-info flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="appointment-doctor-name mb-1">Dr. @doctorName</h6>
+                                        @if (timeUntil.TotalHours > 0 && timeUntil.TotalDays < 7)
+                                        {
+                                            <span class="badge bg-info time-badge">
+                                                @if (timeUntil.TotalDays >= 1)
+                                                {
+                                                    <span>In @((int)timeUntil.TotalDays) day@(timeUntil.TotalDays > 1 ? "s" : "")</span>
+                                                }
+                                                else if (timeUntil.TotalHours >= 1)
+                                                {
+                                                    <span>In @((int)timeUntil.TotalHours) hour@(timeUntil.TotalHours > 1 ? "s" : "")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>Soon</span>
+                                                }
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <div class="specialty-badge-small mb-2">@doctorSpecialty</div>
+
+                                    <div class="appointment-details mb-3">
+                                        <div class="detail-item">
+                                            <i class="fas fa-calendar me-2 text-primary"></i>
+                                            <span class="fw-medium">@item.Date.ToString("dddd, dd MMMM yyyy")</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-clock me-2 text-primary"></i>
+                                            <span class="fw-medium">@string.Format("{0:D2}:{1:D2}", item.TimeSlot.Hours, item.TimeSlot.Minutes)</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fas fa-map-marker-alt me-2 text-primary"></i>
+                                            <span>Clinic</span>
                                         </div>
                                     </div>
 
-                                    <form asp-action="Book" method="post" class="mt-auto">
+                                    <button class="cv-toggle-btn mb-3" type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#cv-@appointmentId"
+                                            aria-expanded="false">
+                                        <i class="fas fa-user-md me-1"></i>
+                                        Doctor Profile
+                                        <i class="fas fa-chevron-down ms-1"></i>
+                                    </button>
+
+                                    <div class="collapse" id="cv-@appointmentId">
+                                        <div class="cv-content mb-3">
+                                            <strong>About Dr. @doctorName:</strong><br>
+                                            @doctorCV
+                                            <hr class="my-2">
+                                            <div class="row g-2 text-center">
+                                                <div class="col-4">
+                                                    <small class="text-muted">Specialty</small><br>
+                                                    <strong>@doctorSpecialty</strong>
+                                                </div>
+                                                <div class="col-4">
+                                                    <small class="text-muted">Experience</small><br>
+                                                    <strong>5+ Years</strong>
+                                                </div>
+                                                <div class="col-4">
+                                                    <small class="text-muted">Rating</small><br>
+                                                    <strong>@ratingDisplay</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <form asp-action="Book" method="post" class="d-inline">
                                         <input type="hidden" name="id" value="@item.AppointmentId" />
-                                        <button type="submit" class="btn btn-primary w-100"
-                                                onclick="return confirm('Book appointment with Dr. @doctorName on @item.Date.ToString("dd MMM") at @item.TimeSlot.ToString(@"hh\:mm")?')">
-                                            <i class="fas fa-calendar-plus me-2"></i>Book Appointment
+                                        <button type="submit" class="btn btn-primary w-100 book-btn"
+                                                onclick="return confirm('Book appointment with Dr. @doctorName on @item.Date.ToString("dd MMM yyyy") at ' + '@string.Format("{0:D2}:{1:D2}", item.TimeSlot.Hours, item.TimeSlot.Minutes)' + '?')">
+                                            <i class="fas fa-calendar-check me-2"></i>
+                                            Book Appointment
                                         </button>
                                     </form>
                                 </div>
@@ -102,79 +252,224 @@
 </div>
 
 <style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+    }
+
+    .bg-gradient-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #117a8b 100%);
+    }
+
+    .bg-gradient-warning {
+        background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%);
+    }
+
     .welcome-card {
-        border-radius: 12px;
-        overflow: hidden;
+        background: linear-gradient(135deg, #f8f9ff 0%, #e8f0ff 100%);
     }
 
-    .doctor-card {
+    .appointment-card {
         transition: all 0.3s ease;
-        border-radius: 10px;
-        overflow: hidden;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+        padding: 1.5rem;
     }
 
-        .doctor-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        .appointment-card:hover {
+            background-color: #f8f9fa;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.15);
         }
 
-    .doctor-image-container {
-        position: relative;
-        height: 180px;
-        overflow: hidden;
-    }
-
-    .doctor-image {
-        width: 100%;
-        height: 100%;
+    .appointment-avatar {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
         object-fit: cover;
-        transition: transform 0.3s ease;
+        border: 3px solid #e9ecef;
+        transition: all 0.3s ease;
     }
 
-    .doctor-card:hover .doctor-image {
+    .appointment-card:hover .appointment-avatar {
+        border-color: #007bff;
         transform: scale(1.05);
     }
 
-    .doctor-specialty-badge {
-        position: absolute;
-        bottom: 15px;
-        left: 15px;
-        background: rgba(13, 110, 253, 0.9);
-        color: white;
-        padding: 5px 10px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
+    .appointment-doctor-name {
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 1.1rem;
     }
+
+    .specialty-badge-small {
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        color: white;
+        padding: 3px 10px;
+        border-radius: 15px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+
+    .appointment-details .detail-item {
+        margin-bottom: 6px;
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    .appointment-details i {
+        width: 16px;
+    }
+
+    .time-badge {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+    }
+
+    .badge-sm {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+    }
+
+    .cv-toggle-btn {
+        background: none;
+        border: none;
+        color: #007bff;
+        font-size: 0.85rem;
+        padding: 4px 0;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+        .cv-toggle-btn:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+
+    .cv-content {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 0.85rem;
+        color: #495057;
+        border-left: 3px solid #007bff;
+    }
+
+    .book-btn {
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        font-weight: 500;
+        padding: 10px 20px;
+    }
+
+        .book-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 123, 255, 0.3);
+        }
 
     .empty-state {
-        max-width: 500px;
-        margin: 0 auto;
+        padding: 3rem 1rem;
     }
 
-    .default-doctor-avatar {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        background-color: #f0f8ff;
-        color: #4682b4;
-        padding: 20px;
+    /* Mobile Responsive Styles */
+    @@media (max-width: 768px) {
+        .appointment-card {
+            padding: 1rem;
+        }
+
+        .appointment-avatar {
+            width: 60px;
+            height: 60px;
+        }
+
+        .appointment-doctor-name {
+            font-size: 1rem;
+        }
+
+        .btn {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        .col-md-3 {
+            margin-bottom: 1rem;
+        }
+
+        .welcome-card .col-md-4 {
+            display: none !important;
+        }
+
+        .welcome-card .col-md-8 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+
+        .container {
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+
+        .appointment-details .detail-item {
+            font-size: 0.8rem;
+        }
+
+        .cv-toggle-btn {
+            font-size: 0.8rem;
+        }
+
+        .badge {
+            font-size: 0.65rem;
+        }
     }
 </style>
 
 @section Scripts {
     <script>
-        // Smooth scroll to appointments section
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
-                    behavior: 'smooth'
-                });
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('cv-toggle-btn') || e.target.closest('.cv-toggle-btn')) {
+                    const btn = e.target.classList.contains('cv-toggle-btn') ? e.target : e.target.closest('.cv-toggle-btn');
+                    const chevron = btn.querySelector('.fa-chevron-down, .fa-chevron-up');
+                    setTimeout(() => {
+                        const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                        if (chevron) {
+                            chevron.className = isExpanded ? 'fas fa-chevron-up ms-1' : 'fas fa-chevron-down ms-1';
+                        }
+                    }, 10);
+                }
             });
+
+            const observerOptions = { threshold: 0.1, rootMargin: '0px 0px -50px 0px' };
+            const observer = new IntersectionObserver(function(entries) {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, observerOptions);
+
+            document.querySelectorAll('.appointment-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = `opacity 0.5s ease ${index * 0.1}s, transform 0.5s ease ${index * 0.1}s`;
+                observer.observe(card);
+            });
+
+            setTimeout(function() {
+                document.querySelectorAll('.alert').forEach(alert => {
+                    if (alert.classList.contains('alert-success') || alert.classList.contains('alert-info')) {
+                        alert.style.transition = 'opacity 0.5s ease';
+                        alert.style.opacity = '0';
+                        setTimeout(() => alert.remove(), 500);
+                    }
+                });
+            }, 5000);
         });
     </script>
 }

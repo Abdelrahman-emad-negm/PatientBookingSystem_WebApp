@@ -1,0 +1,139 @@
+﻿@model List<PatientBooking.Models.Appointment>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Pending Doctor Slots</h2>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            @if (Model.Any(a => a.Status == PatientBooking.Models.AppointmentStatus.Pending && a.PatientId == null))
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Doctor</th>
+                                <th>Status</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="slotsTableBody">
+                            @foreach (var slot in Model.Where(a => a.Status == PatientBooking.Models.AppointmentStatus.Pending && a.PatientId == null))
+                            {
+                                <tr>
+                                    <td>@slot.Date.ToString("dddd, dd MMM yyyy")</td>
+                                    <td>@DateTime.Today.Add(slot.TimeSlot).ToString("hh:mm tt")</td>
+                                    <td>@(slot.Doctor?.User?.Name ?? "—")</td>
+                                    <td>
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-success update-slot"
+                                                    data-id="@slot.AppointmentId"
+                                                    data-action="ApproveSlot">
+                                                <i class="fas fa-check"></i> Approve
+                                            </button>
+                                            <button class="btn btn-danger update-slot"
+                                                    data-id="@slot.AppointmentId"
+                                                    data-action="RejectSlot">
+                                                <i class="fas fa-times"></i> Reject
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <nav>
+                    <ul class="pagination justify-content-center mt-3" id="pagination"></ul>
+                </nav>
+            }
+            else
+            {
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> No pending slots found.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<form id="__AjaxAntiForgeryForm">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            // ✅ Approve / Reject Slot - Fixed parameter name
+            document.querySelectorAll(".update-slot").forEach(button => {
+                button.onclick = function () {
+                    const id = this.dataset.id;
+                    const action = this.dataset.action;
+
+                    if (confirm(`Are you sure you want to ${action.replace("Slot", "").toLowerCase()} this slot?`)) {
+                        fetch(`/Admin/${action}`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                            // ✅ Changed from 'id' to 'appointmentId' to match Controller parameter
+                            body: `appointmentId=${id}&__RequestVerificationToken=${token}`
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            alert(data.message || "Updated successfully");
+                            if (data.success) location.reload();
+                        })
+                        .catch(() => alert("Something went wrong, please try again."));
+                    }
+                };
+            });
+
+            // ✅ Pagination (10 per page)
+            function setupPagination() {
+                const rows = document.querySelectorAll("#slotsTableBody tr");
+                const rowsPerPage = 10;
+                const pageCount = Math.ceil(rows.length / rowsPerPage);
+                const pagination = document.getElementById("pagination");
+                let currentPage = 1;
+
+                function showPage(page) {
+                    currentPage = page;
+                    rows.forEach((row, i) => {
+                        row.style.display = (i >= (page - 1) * rowsPerPage && i < page * rowsPerPage) ? "" : "none";
+                    });
+                    renderPagination();
+                }
+
+                function renderPagination() {
+                    pagination.innerHTML = "";
+                    if (pageCount <= 1) return;
+                    for (let i = 1; i <= pageCount; i++) {
+                        pagination.innerHTML += `
+                            <li class="page-item ${i === currentPage ? "active" : ""}">
+                                <a class="page-link" href="#">${i}</a>
+                            </li>`;
+                    }
+                    pagination.querySelectorAll("a").forEach((a, i) => {
+                        a.addEventListener("click", e => {
+                            e.preventDefault();
+                            showPage(i + 1);
+                        });
+                    });
+                }
+
+                showPage(1);
+            }
+
+            setupPagination();
+        });
+    </script>
+}

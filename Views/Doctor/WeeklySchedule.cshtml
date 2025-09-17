@@ -7,6 +7,8 @@
     var endOfWeek = (DateTime)ViewBag.EndOfWeek;
 }
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
 <div class="container mt-5">
     <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
@@ -16,8 +18,8 @@
         </div>
         <div class="card-body">
             <p class="text-center text-muted mb-4">
-                From <strong>@startOfWeek:dd MMM yyyy</strong>
-                to <strong>@endOfWeek.AddDays(-1):dd MMM yyyy</strong>
+                From <strong>@startOfWeek.ToString("dd MMM yyyy")</strong>
+                to <strong>@endOfWeek.AddDays(-1).ToString("dd MMM yyyy")</strong>
             </p>
 
             @if (!Model.Any())
@@ -36,11 +38,18 @@
                                 <th>Time</th>
                                 <th>Patient</th>
                                 <th>Status</th>
+                                <th class="text-center">State</th> @* Upcoming / Past *@
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var a in Model)
                             {
+                                var appointmentDateTime = a.Date.Add(a.TimeSlot);
+                                var isUpcoming = appointmentDateTime > DateTime.Now;
+                                var displayDate = appointmentDateTime.ToString("dddd, dd MMM yyyy"); // Monday, 16 Sep 2025
+                                var displayTime = appointmentDateTime.ToString("hh:mm tt"); // 03:00 PM
+                                var patientName = string.IsNullOrWhiteSpace(a.Patient?.Name) ? "—" : a.Patient.Name;
+
                                 var (statusClass, statusIcon) = a.Status switch
                                 {
                                     PatientBooking.Models.AppointmentStatus.Confirmed => ("badge bg-primary", "fas fa-check-circle"),
@@ -50,15 +59,24 @@
                                     PatientBooking.Models.AppointmentStatus.Completed => ("badge bg-secondary", "fas fa-clipboard-check"),
                                     _ => ("badge bg-light text-dark", "fas fa-info-circle")
                                 };
-
                                 <tr>
-                                    <td>@a.Date.ToString("dddd, dd MMM yyyy")</td>
-                                    <td>@a.TimeSlot.ToString(@"hh\:mm")</td>
-                                    <td>@(a.Patient?.Name ?? "Available")</td>
+                                    <td>@displayDate</td>
+                                    <td>@displayTime</td>
+                                    <td>@patientName</td>
                                     <td>
                                         <span class="@statusClass">
                                             <i class="@statusIcon me-1"></i> @a.Status
                                         </span>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (isUpcoming)
+                                        {
+                                            <span class="badge bg-info text-dark">Upcoming</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Past</span>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -69,5 +87,3 @@
         </div>
     </div>
 </div>
-
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

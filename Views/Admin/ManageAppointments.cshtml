@@ -1,60 +1,199 @@
 ﻿@model List<PatientBooking.Models.Appointment>
 
 <div class="container mt-4">
-    <div class="d-flex justify-content-between mb-4">
-        <h2>Manage Appointments</h2>
-        <a class="btn btn-outline-secondary" href="/Admin/ExportAppointments">
-            <i class="fas fa-download"></i> Export
-        </a>
+    <!-- Header + Filter -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-calendar-check text-primary"></i> Manage Appointments</h2>
+        <div class="d-flex align-items-center">
+            <label class="me-2 fw-bold">Status:</label>
+            <select id="statusFilter" class="form-select d-inline w-auto me-3">
+                <option value="">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Confirmed">Confirmed</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Available">Available</option>
+                <option value="Completed">Completed</option>
+            </select>
+            <a class="btn btn-outline-primary" href="/Admin/ExportAppointments">
+                <i class="fas fa-file-csv"></i> Export CSV
+            </a>
+        </div>
     </div>
 
+    <!-- Custom CSS for Beautiful Buttons -->
+    <style>
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-modern {
+            position: relative;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-width: 80px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+
+            .btn-modern:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            }
+
+            .btn-modern:active {
+                transform: translateY(0);
+            }
+
+        .btn-confirm {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+            .btn-confirm:hover {
+                background: linear-gradient(135deg, #059669, #047857);
+                color: white;
+            }
+
+        .btn-reject {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+            .btn-reject:hover {
+                background: linear-gradient(135deg, #dc2626, #b91c1c);
+                color: white;
+            }
+
+        .btn-cancel {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+
+            .btn-cancel:hover {
+                background: linear-gradient(135deg, #4b5563, #374151);
+                color: white;
+            }
+
+        .btn-complete {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+        }
+
+            .btn-complete:hover {
+                background: linear-gradient(135deg, #7c3aed, #6d28d9);
+                color: white;
+            }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: rgba(0,0,0,0.02);
+        }
+
+        .btn-modern i {
+            font-size: 14px;
+        }
+
+        /* Mobile Responsive */
+        @@media (max-width: 768px) {
+            .action-buttons {
+                gap: 4px;
+                flex-direction: column;
+            }
+
+            .btn-modern {
+                min-width: 70px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
+
+    <!-- Table -->
     <div class="card shadow-sm">
         <div class="card-body">
             @if (Model.Any())
             {
                 <div class="table-responsive">
-                    <table class="table table-hover" id="appointmentsTable">
-                        <thead class="table-light">
+                    <table class="table table-striped table-hover align-middle" id="appointmentsTable">
+                        <thead class="table-dark">
                             <tr>
                                 <th>Date</th>
                                 <th>Time</th>
                                 <th>Doctor</th>
                                 <th>Patient</th>
                                 <th>Status</th>
-                                <th>Actions</th>
+                                <th class="text-center" style="width: 180px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var app in Model)
                             {
-                                <tr>
-                                    <td>@app.Date.ToString("yyyy-MM-dd")</td>
-                                    <td>@app.TimeSlot.ToString(@"hh\:mm")</td>
-                                    <td>@app.Doctor?.User?.Name</td>
-                                    <td>@app.Patient?.Name</td>
+                                <tr data-status="@app.Status">
+                                    <td>@app.Date.ToString("dddd, dd MMM yyyy")</td>
+                                    <td>@DateTime.Today.Add(app.TimeSlot).ToString("hh:mm tt")</td>
+                                    <td>@(app.Doctor?.User?.Name ?? "—")</td>
+                                    <td>@(app.Patient?.Name ?? "—")</td>
                                     <td>
-                                        <span class="badge @GetStatusBadgeClass(app.Status)">
+                                        <span class="badge status-badge @GetStatusBadgeClass(app.Status)">
                                             @app.Status
                                         </span>
                                     </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
+                                    <td class="text-center">
+                                        <div class="action-buttons">
                                             @if (app.Status == PatientBooking.Models.AppointmentStatus.Pending)
                                             {
-                                                <button class="btn btn-success"
-                                                        onclick="updateAppointment(@app.AppointmentId, 'ConfirmBooking')">
+                                                <button class="btn btn-modern btn-confirm update-btn"
+                                                        data-bs-toggle="tooltip"
+                                                        title="Confirm this appointment"
+                                                        data-id="@app.AppointmentId"
+                                                        data-action="ConfirmBooking">
                                                     <i class="fas fa-check"></i> Confirm
                                                 </button>
-                                                <button class="btn btn-danger"
-                                                        onclick="updateAppointment(@app.AppointmentId, 'RejectBooking')">
+                                                <button class="btn btn-modern btn-reject update-btn"
+                                                        data-bs-toggle="tooltip"
+                                                        title="Reject this appointment"
+                                                        data-id="@app.AppointmentId"
+                                                        data-action="RejectBooking">
                                                     <i class="fas fa-times"></i> Reject
                                                 </button>
                                             }
-                                            @if (app.Status == PatientBooking.Models.AppointmentStatus.Confirmed
-                                                                                || app.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                            @if (app.Status == PatientBooking.Models.AppointmentStatus.Confirmed)
                                             {
-                                                <button class="btn btn-secondary"
-                                                        onclick="updateAppointment(@app.AppointmentId, 'CancelBooking')">
+                                                <button class="btn btn-modern btn-complete update-btn"
+                                                        data-bs-toggle="tooltip"
+                                                        title="Mark as completed"
+                                                        data-id="@app.AppointmentId"
+                                                        data-action="CompleteBooking">
+                                                    <i class="fas fa-check-double"></i> Complete
+                                                </button>
+                                            }
+                                            @if (app.Status == PatientBooking.Models.AppointmentStatus.Confirmed ||
+                                                                                app.Status == PatientBooking.Models.AppointmentStatus.Pending)
+                                            {
+                                                <button class="btn btn-modern btn-cancel update-btn"
+                                                        data-bs-toggle="tooltip"
+                                                        title="Cancel this appointment"
+                                                        data-id="@app.AppointmentId"
+                                                        data-action="CancelBooking">
                                                     <i class="fas fa-ban"></i> Cancel
                                                 </button>
                                             }
@@ -65,11 +204,16 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Pagination -->
+                <nav>
+                    <ul class="pagination justify-content-center mt-3" id="pagination"></ul>
+                </nav>
             }
             else
             {
-                <div class="alert alert-info">
-                    No appointments found.
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> No appointments found.
                 </div>
             }
         </div>
@@ -83,21 +227,133 @@
         {
             PatientBooking.Models.AppointmentStatus.Pending => "bg-warning text-dark",
             PatientBooking.Models.AppointmentStatus.Confirmed => "bg-success",
-            PatientBooking.Models.AppointmentStatus.Cancelled => "bg-secondary",
+            PatientBooking.Models.AppointmentStatus.Cancelled => "bg-danger",
             PatientBooking.Models.AppointmentStatus.Available => "bg-primary",
+            PatientBooking.Models.AppointmentStatus.Completed => "bg-secondary",
             _ => "bg-info"
         };
     }
 }
 
+<form id="__AjaxAntiForgeryForm">
+    @Html.AntiForgeryToken()
+</form>
+
 @section Scripts {
     <script>
-        function updateAppointment(id, action) {
-            if (confirm(`Are you sure you want to ${action.replace('Booking','').toLowerCase()} this appointment?`)) {
-                $.post(`/Admin/${action}/${id}`, function() {
-                    location.reload();
+        document.addEventListener("DOMContentLoaded", function () {
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            // ✅ Enable Bootstrap tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
+            });
+
+            // ✅ Status Filter
+            document.getElementById("statusFilter").addEventListener("change", function () {
+                const selected = this.value;
+                document.querySelectorAll("#appointmentsTable tbody tr").forEach(row => {
+                    if (!selected || row.dataset.status === selected) {
+                        row.style.display = "";
+                    } else {
+                        row.style.display = "none";
+                    }
+                });
+                setupPagination();
+            });
+
+            // ✅ Update Appointment Actions
+            function attachUpdateEvents() {
+                document.querySelectorAll(".update-btn").forEach(button => {
+                    button.onclick = function () {
+                        const id = this.dataset.id;
+                        const action = this.dataset.action;
+
+                        // Better confirmation messages
+                        const actionText = {
+                            'ConfirmBooking': 'confirm',
+                            'RejectBooking': 'reject',
+                            'CancelBooking': 'cancel',
+                            'CompleteBooking': 'mark as completed'
+                        };
+
+                        if (confirm(`Are you sure you want to ${actionText[action]} this appointment?`)) {
+                            // Disable button during request
+                            this.disabled = true;
+                            const originalHTML = this.innerHTML;
+                            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                            fetch(`/Admin/${action}`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                body: `appointmentId=${id}&__RequestVerificationToken=${token}`
+                            })
+                            .then(res => res.json())
+                            .then(data => {
+                                alert(data.message || "Updated successfully");
+                                if (data.success) {
+                                    location.reload();
+                                } else {
+                                    // Re-enable button if failed
+                                    this.disabled = false;
+                                    this.innerHTML = originalHTML;
+                                }
+                            })
+                            .catch(() => {
+                                alert("Something went wrong, please try again.");
+                                // Re-enable button on error
+                                this.disabled = false;
+                                this.innerHTML = originalHTML;
+                            });
+                        }
+                    };
                 });
             }
-        }
+
+            // ✅ Pagination (10 per page)
+            function setupPagination() {
+                const rows = Array.from(document.querySelectorAll("#appointmentsTable tbody tr"))
+                                  .filter(r => r.style.display !== "none");
+                const rowsPerPage = 10;
+                const pageCount = Math.ceil(rows.length / rowsPerPage);
+                const pagination = document.getElementById("pagination");
+
+                pagination.innerHTML = "";
+                if (pageCount <= 1) return;
+
+                let currentPage = 1;
+
+                function showPage(page) {
+                    currentPage = page;
+                    rows.forEach((row, i) => {
+                        row.style.display = (i >= (page - 1) * rowsPerPage && i < page * rowsPerPage) ? "" : "none";
+                    });
+                    renderPagination();
+                    attachUpdateEvents();
+                }
+
+                function renderPagination() {
+                    pagination.innerHTML = "";
+                    for (let i = 1; i <= pageCount; i++) {
+                        pagination.innerHTML += `
+                            <li class="page-item ${i === currentPage ? "active" : ""}">
+                                <a class="page-link" href="#">${i}</a>
+                            </li>`;
+                    }
+                    pagination.querySelectorAll("a").forEach((a, i) => {
+                        a.addEventListener("click", e => {
+                            e.preventDefault();
+                            showPage(i + 1);
+                        });
+                    });
+                }
+
+                showPage(1);
+            }
+
+            attachUpdateEvents();
+            setupPagination();
+        });
     </script>
 }

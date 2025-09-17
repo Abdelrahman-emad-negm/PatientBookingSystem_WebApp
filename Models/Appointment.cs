@@ -50,5 +50,18 @@ namespace PatientBooking.Models
         [StringLength(500)]
         [Display(Name = "Admin Notes")]
         public string? AdminNotes { get; set; }
+
+        // ⭐ Rating System Properties
+        [Range(1, 5, ErrorMessage = "Rating must be between 1 and 5 stars")]
+        [Display(Name = "Rating")]
+        public int? Rating { get; set; }
+
+        [StringLength(500, ErrorMessage = "Review comment cannot exceed 500 characters")]
+        [Display(Name = "Review Comment")]
+        public string? ReviewComment { get; set; }
+
+        [Display(Name = "Rated At")]
+        public DateTime? RatedAt { get; set; }
+        public string? CreatedAt { get; internal set; }
     }
 }
