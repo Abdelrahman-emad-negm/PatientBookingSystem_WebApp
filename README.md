@@ -208,18 +208,7 @@ GET  /Patient/MyAppointments    - Get booking history
 POST /Patient/RateDoctor        - Submit doctor review
 ```
 
-## 📱 Screenshots
 
-### Admin Dashboard
-![Admin Dashboard](screenshots/admin-dashboard.png)
-
-### Doctor Schedule
-![Doctor Schedule](screenshots/doctor-schedule.png)
-
-### Patient Booking
-![Patient Booking](screenshots/patient-booking.png)
-
-## 🤝 Contributing
 
 We welcome contributions! Please follow these steps:
 
@@ -250,17 +239,18 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **[Paxera](https://paxera.com)** - For providing the training opportunity and development environment
-- **Eng. Kareem** - Technical mentorship and project guidance
-- **Eng. Enas** - Valuable advice and motivation throughout development
+- **[Paxera Health](https://www.linkedin.com/company/paxerahealth-emea/)** - For providing the training opportunity and development environment
+- **[Eng. Kareem Ashraf](https://www.linkedin.com/in/karem-ashraf)** - Technical mentorship and project guidance
+- **[Eng. Enas Mostafa](https://www.linkedin.com/in/enas-mostafa-529b4026)** - Valuable advice and motivation throughout development
 - **Open Source Community** - For the amazing tools and libraries used in this project
 
 ## 👨‍💻 Author
 
-**Your Name**
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [Your LinkedIn](https://linkedin.com/in/yourprofile)
-- Email: your.email@example.com
+**Abdelrahman Emad Negm**
+- GitHub: [@Abdelrahman-emad-negm](https://github.com/Abdelrahman-emad-negm)
+- LinkedIn: [Abdelrahman Emad Negm](https://www.linkedin.com/in/abdelrahman-emad-negm-30baab314)
+- Email: abdelrahman.abdelmeged05@eng-st.cu.edu.eg
+- Phone: +201032723117
 
 ---
 
@@ -270,7 +260,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you have any questions or need support, please:
 - Open an issue on GitHub
-- Contact me via email
+- Contact me via email: abdelrahman.abdelmeged05@eng-st.cu.edu.eg
 - Connect on LinkedIn
+- WhatsApp: +201032723117
+
+**Demo Video**: [View Project Demo](https://drive.google.com/drive/folders/1Q_DNTUz1rdN4cKAIlzzFZyeAfPUQ5Nly?usp=drive_link)
 
 **Built with ❤️ in Egypt**
